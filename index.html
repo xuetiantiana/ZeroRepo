@@ -1,0 +1,1612 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>JSON Data Visualization</title>
+  <script type="text/javascript" src="./vis-network.min.js"></script>
+  <style type="text/css">
+    /* ==================== 基础样式 ==================== */
+    body,
+    html {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+
+    .main-container {
+      display: flex;
+      width: 100%;
+      height: 100vh;
+    }
+
+    /* ==================== 左侧边栏样式 ==================== */
+    .sidebar {
+      max-width: 600px;
+      width: 30%;
+      background: #f8f9fa;
+      border-right: 2px solid #dee2e6;
+      overflow: hidden;
+      padding: 0;
+      box-sizing: border-box;
+      position: relative;
+    }
+
+    .sidebar h3 {
+      margin: 0;
+      color: #343a40;
+      font-size: 18px;
+      font-weight: bold;
+      border-bottom: 2px solid #6495ED;
+      padding: 20px;
+      background: white;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 10;
+    }
+
+    #relationshipNetwork {
+      width: 100%;
+      height: 100vh;
+      padding-top: 80px;
+      box-sizing: border-box;
+    }
+
+    /* ==================== 主网络容器 ==================== */
+    #mynetwork {
+      flex: 1;
+      height: 100vh;
+      border: 1px solid lightgray;
+    }
+
+    /* ==================== 弹窗样式 ==================== */
+    #nodeModal {
+      left: 0 !important;
+      top: 0 !important;
+      position: absolute;
+      width: 400px;
+      background: white;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+      z-index: -1;
+      opacity: 0;
+      transition: opacity 0.3s ease-in-out;
+      pointer-events: none;
+    }
+
+    #nodeModal.show {
+      z-index: 1000;
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    #nodeModal .modal-header {
+      background: #f5f5f5;
+      padding: 15px;
+      border-bottom: 1px solid #ddd;
+      border-radius: 6px 6px 0 0;
+      position: relative;
+      cursor: move;
+    }
+
+    #nodeModal .modal-title {
+      margin: 0;
+      font-size: 14px;
+      font-weight: bold;
+      color: #333;
+    }
+
+    #nodeModal .close-btn {
+      position: absolute;
+      right: 10px;
+      top: 10px;
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: #666;
+      width: 30px;
+      height: 30px;
+      border-radius: 15px;
+    }
+
+    #nodeModal .close-btn:hover {
+      background: #e0e0e0;
+      color: #000;
+    }
+
+    #nodeModal .modal-body {
+      padding: 15px;
+      max-height: 500px;
+      overflow-y: auto;
+    }
+
+    #nodeModal .info-item {
+      margin-bottom: 10px;
+    }
+
+    #nodeModal .info-label {
+      font-weight: bold;
+      color: #555;
+    }
+
+    #nodeModal .info-value {
+      margin-left: 10px;
+      color: #333;
+    }
+
+    /* ==================== Map.json 内容样式 ==================== */
+    #nodeModal .map-content {
+      margin-top: 15px;
+      padding-top: 15px;
+      border-top: 1px solid #ddd;
+    }
+
+    #nodeModal .map-content-title {
+      font-weight: bold;
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 16px;
+    }
+
+    #nodeModal .map-content-body {
+      color: #555;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      background: #f8f9fa;
+      padding: 10px;
+      border-radius: 4px;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 13px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="main-container">
+    <!-- 左侧关系展示区域 -->
+    <div class="sidebar">
+      <h3>data_flow_graph</h3>
+      <div id="relationshipNetwork"></div>
+    </div>
+
+    <!-- 主可视化区域 -->
+    <div id="mynetwork"></div>
+  </div>
+
+  <!-- 节点信息弹窗 -->
+  <div id="nodeModal">
+    <div class="modal-header">
+      <h3 class="modal-title" id="modalTitle">节点信息</h3>
+      <button class="close-btn" onclick="closeModal()">&times;</button>
+    </div>
+    <div class="modal-body" id="modalBody">
+      <!-- 节点信息将在这里显示 -->
+    </div>
+  </div>
+
+  <script type="text/javascript">
+    // ==================== 全局变量 ====================
+    let mapData = null;  // 存储map.json数据
+
+    // ==================== 主数据处理函数 ====================
+    function processData(data) {
+      // 初始化变量
+      let nodes = [];
+      let edges = [];
+      let idCounter = 1;
+      const nodeNameToId = {};
+      let allNodesData = [];
+      let allEdgesData = [];
+      let nodeChildren = {};
+      let nodeParent = {};
+      let expandedNodes = new Set();
+
+      // ==================== 递归添加节点和边 ====================
+      function addNodesAndEdges(obj, parentId, level = 0, parentKey = '', parentPath = '', rootId = null, rootLabel = '') {
+        for (const key in obj) {
+          if (obj.hasOwnProperty(key)) {
+            const currentId = idCounter++;
+            let nodeLabel = key;
+            nodeNameToId[nodeLabel] = currentId;
+
+            const currentPath = parentPath ? `${parentPath}/${key}` : key;
+
+            // 记录父子关系
+            if (parentId) {
+              if (!nodeChildren[parentId]) {
+                nodeChildren[parentId] = [];
+              }
+              nodeChildren[parentId].push(currentId);
+              nodeParent[currentId] = parentId;
+            }
+
+            let nodeTitle = currentPath;
+            let nodeShape = 'box';
+            let nodeColor = {
+              border: '#B0C4DE',
+              background: '#F0F8FF',
+              highlight: { border: '#4682B4', background: '#ADD8E6' }
+            };
+
+            // 处理数组类型
+            if (Array.isArray(obj[key])) {
+              nodeColor = {
+                border: '#D3D3D3',
+                background: '#F5F5F5',
+                highlight: { border: '#A9A9A9', background: '#E0E0E0' }
+              };
+
+              let containerNodeData = {
+                id: currentId,
+                label: nodeLabel,
+                originalLabel: nodeLabel,
+                title: `${currentPath}`,  //存放feature_path
+                path: currentPath,
+                shape: nodeShape,
+                color: nodeColor,
+                font: { size: 14, bold: true },
+                level: level,
+                widthConstraint: { minimum: 101, maximum: 101 },
+                hidden: true,
+                isArrayContainer: true,
+                rootId: rootId,      // 存储根节点ID
+                rootLabel: rootLabel  // 存储根节点标签
+              };
+              allNodesData.push(containerNodeData);
+
+              if (parentId) {
+                let edgeData = { from: parentId, to: currentId, hidden: true };
+                allEdgesData.push(edgeData);
+              }
+
+              // 为数组元素创建叶子节点
+              obj[key].forEach((item, index) => {
+                const itemId = idCounter++;
+                const itemLabel = typeof item === 'string' ? item : `Item ${index + 1}`;
+                const itemPath = `${currentPath}/${itemLabel}`;
+
+                if (!nodeChildren[currentId]) {
+                  nodeChildren[currentId] = [];
+                }
+                nodeChildren[currentId].push(itemId);
+                nodeParent[itemId] = currentId;
+
+                let itemNodeData = {
+                  id: itemId,
+                  label: itemLabel,
+                  title: `${itemPath}`, //存放feature_path
+                  path: itemPath,
+                  shape: 'box',
+                  color: {
+                    border: '#FFD700',
+                    background: '#FFFACD',
+                    highlight: { border: '#DAA520', background: '#FFFFE0' }
+                  },
+                  font: { size: 14, bold: true },
+                  level: level + 1,
+                  hidden: true,
+                  heightConstraint: { minimum: 20 },
+                  widthConstraint: { minimum: 101, maximum: 101 },
+                  rootId: rootId,      // 存储根节点ID
+                  rootLabel: rootLabel  // 存储根节点标签
+                };
+                allNodesData.push(itemNodeData);
+
+                let itemEdgeData = { from: currentId, to: itemId, hidden: true };
+                allEdgesData.push(itemEdgeData);
+              });
+
+            }
+            // 处理对象类型
+            else if (typeof obj[key] === 'object' && obj[key] !== null) {
+              nodeColor = {
+                border: '#D3D3D3',
+                background: '#F5F5F5',
+                highlight: { border: '#A9A9A9', background: '#E0E0E0' }
+              };
+
+              let nodeData = {
+                id: currentId,
+                label: nodeLabel,
+                title: `${currentPath}`, //存放feature_path
+                path: currentPath,
+                shape: nodeShape,
+                color: nodeColor,
+                font: { size: 14, bold: true },
+                level: level,
+                widthConstraint: { minimum: 101, maximum: 101 },
+                hidden: true,
+                rootId: rootId,      // 存储根节点ID
+                rootLabel: rootLabel  // 存储根节点标签
+              };
+
+              if (Object.keys(obj[key]).length > 0) {
+                nodeData.originalLabel = nodeLabel;
+              }
+
+              allNodesData.push(nodeData);
+              if (parentId) {
+                let edgeData = { from: parentId, to: currentId, hidden: true };
+                allEdgesData.push(edgeData);
+              }
+              addNodesAndEdges(obj[key], currentId, level + 1, nodeLabel, currentPath, rootId, rootLabel);
+            }
+          }
+        }
+      }
+
+      // ==================== 处理子树数据 ====================
+      if (data.subtrees && Array.isArray(data.subtrees)) {
+        // 直接使用原始顺序，不再排序
+        data.subtrees.forEach((subtree, index) => {
+          const subtreeRootId = idCounter++;
+          const subtreeLabel = subtree.name || 'Unnamed Subtree';
+          let mainNodeColor = {
+            border: '#6495ED',
+            background: '#E6E6FA',
+            highlight: { border: '#4149E1', background: '#D8BFD8' }
+          };
+
+          let nodeData = {
+            id: subtreeRootId,
+            label: subtreeLabel,
+            originalLabel: subtreeLabel,
+            title: `${subtreeLabel}`, //存放feature_path
+            file_path: subtree.file_path || 'N/A',
+            shape: 'box',
+            color: mainNodeColor,
+            font: { size: 16, bold: true, color: '#000' },
+            margin: 10,
+            widthConstraint: { minimum: 150, maximum: 150 },
+            heightConstraint: { minimum: 20, maximum: 20 },
+            level: 0,
+            hidden: false,
+            sortOrder: index,
+            rootId: subtreeRootId,    // 根节点的rootId是自己
+            rootLabel: subtreeLabel    // 根节点的rootLabel是自己的标签
+          };
+          allNodesData.push(nodeData);
+          nodeNameToId[subtreeLabel] = subtreeRootId;
+
+          if (subtree.refactored_subtree) {
+            // 传递根节点信息到递归函数
+            addNodesAndEdges(subtree.refactored_subtree, subtreeRootId, 1, subtreeLabel, subtreeLabel, subtreeRootId, subtreeLabel);
+          }
+        });
+      }
+
+      // ==================== 处理数据流图 根节点之间的连线====================
+      if (data.data_flow_graph && Array.isArray(data.data_flow_graph)) {
+        console.log("？？？", nodeNameToId)
+        data.data_flow_graph.forEach(flow => {
+          const fromId = nodeNameToId[flow.from];
+          const toId = nodeNameToId[flow.to];
+          if (fromId && toId) {
+            const fromIndex = data.subtrees.findIndex(subtree => subtree.name === flow.from);
+            const toIndex = data.subtrees.findIndex(subtree => subtree.name === flow.to);
+
+            const isAdjacent = Math.abs(fromIndex - toIndex) === 1;
+
+            let edgeData = {
+              from: fromId,
+              to: toId,
+              arrows: 'to',
+              label: flow.data_type || flow.label || '',
+              color: { color: '#2B7CE9', highlight: '#2B7CE9', hover: '#2B7CE9' },
+              font: { 
+                // align: 'middle',
+                size: 12,
+                color: '#5A97F2',
+                strokeWidth: 2,
+                strokeColor: '#ffffff',
+                background: '#ffffff'
+              },
+              width: 1,
+              hidden: false
+            };
+
+            if (isAdjacent) {
+              edgeData.smooth = { enabled: false };
+            } else {
+              let curveType, roundness;
+
+              if (fromIndex < toIndex) {
+                curveType = 'curvedCCW';
+                roundness = 0.6;
+              } else {
+                curveType = 'curvedCW';
+                roundness = 1;
+              }
+
+              edgeData.smooth = {
+                type: curveType,
+                roundness: roundness
+              };
+            }
+
+            // allEdgesData.push(edgeData);
+          } else {
+            console.warn('Could not create edge for flow:', flow, 'due to missing node IDs.');
+          }
+        });
+      }
+
+      // ==================== 初始化可见节点和边 ====================
+      const visibleNodes = allNodesData.filter(node => !node.hidden);
+      const visibleEdges = allEdgesData.filter(edge => !edge.hidden);
+      console.log("ERRWEREWR!!!!!!!", visibleNodes, visibleEdges);
+
+      // ==================== 展开/收起功能 ====================
+      function toggleNodeChildren(nodeId) {
+        const children = nodeChildren[nodeId];
+        if (!children) return;
+
+        const isExpanded = expandedNodes.has(nodeId);
+
+        if (isExpanded) {
+          expandedNodes.delete(nodeId);
+          hideNodeAndDescendants(nodeId);  // 收起：隐藏子节点
+        } else {
+          expandedNodes.add(nodeId);
+          showDirectChildren(nodeId);      // 展开：显示子节点
+        }
+
+        updateNetworkDisplay();  // 更新显示
+      }
+
+      function hideNodeAndDescendants(nodeId) {
+        const children = nodeChildren[nodeId];
+        if (!children) return;
+
+        // 需要移除的扩展按钮列表
+        const expandButtonsToRemove = [];
+
+        children.forEach(childId => {
+          const nodeIndex = allNodesData.findIndex(n => n.id === childId);
+          if (nodeIndex !== -1) {
+            const childNode = allNodesData[nodeIndex];
+
+            // 检查是否是扩展按钮
+            if (childNode.isExpandButton) {
+              expandButtonsToRemove.push({
+                nodeId: childId,
+                parentId: childNode.parentId
+              });
+            } else {
+              // 普通节点，只隐藏不删除
+              allNodesData[nodeIndex].hidden = true;
+            }
+          }
+
+          allEdgesData.forEach(edge => {
+            if (edge.from === nodeId && edge.to === childId) {
+              edge.hidden = true;
+            }
+          });
+
+          if (expandedNodes.has(childId)) {
+            expandedNodes.delete(childId);
+          }
+
+          // 递归处理子节点（除了扩展按钮）
+          const childNode = allNodesData.find(n => n.id === childId);
+          if (!childNode || !childNode.isExpandButton) {
+            hideNodeAndDescendants(childId);
+          }
+        });
+
+        // 移除所有扩展按钮
+        expandButtonsToRemove.forEach(buttonInfo => {
+          // 从 allNodesData 中移除
+          const buttonIndex = allNodesData.findIndex(n => n.id === buttonInfo.nodeId);
+          if (buttonIndex !== -1) {
+            allNodesData.splice(buttonIndex, 1);
+          }
+
+          // 从 allEdgesData 中移除相关的边
+          const edgeIndex = allEdgesData.findIndex(edge => edge.to === buttonInfo.nodeId);
+          if (edgeIndex !== -1) {
+            allEdgesData.splice(edgeIndex, 1);
+          }
+
+          // 从父节点的 nodeChildren 中移除
+          if (nodeChildren[buttonInfo.parentId]) {
+            const childIndex = nodeChildren[buttonInfo.parentId].indexOf(buttonInfo.nodeId);
+            if (childIndex !== -1) {
+              nodeChildren[buttonInfo.parentId].splice(childIndex, 1);
+            }
+          }
+
+          // 从 nodeParent 中移除
+          delete nodeParent[buttonInfo.nodeId];
+        });
+      }
+
+      function showDirectChildren(nodeId) {
+        const children = nodeChildren[nodeId];
+        if (!children) return;
+
+        const parentNode = allNodesData.find(n => n.id === nodeId);
+        // 使用 isArrayContainer 属性判断
+        if (parentNode && parentNode.isArrayContainer && children.length > 3) {
+          // 对于数组容器，只显示前3个子节点，其余创建"更多"按钮
+          const maxVisible = 3;
+          const visibleChildren = children.slice(0, maxVisible);
+          const hiddenCount = children.length - maxVisible;
+
+          // 显示前3个子节点
+          visibleChildren.forEach(childId => {
+            const nodeIndex = allNodesData.findIndex(n => n.id === childId);
+            if (nodeIndex !== -1) {
+              allNodesData[nodeIndex].hidden = false;  // 设置为可见
+            }
+
+            allEdgesData.forEach(edge => {
+              if (edge.from === nodeId && edge.to === childId) {
+                edge.hidden = false;  // 显示相关的边
+              }
+            });
+          });
+
+          // 创建扩展按钮
+          const expandButtonId = idCounter++;
+          const expandButtonNode = {
+            id: expandButtonId,
+            label: `+${hiddenCount} 更多...`,
+            title: `点击显示剩余 ${hiddenCount} 个项目`,
+            shape: 'box',
+            color: {
+              border: '#FFD700',
+              background: '#FFFACD',
+              highlight: { border: '#DAA520', background: '#FFFFE0' }
+            },
+            font: { size: 14, bold: true },
+            level: parentNode.level + 1,
+            hidden: false,
+            widthConstraint: { minimum: 101, maximum: 101 },
+            heightConstraint: { minimum: 20 },
+            isExpandButton: true,
+            parentId: nodeId,
+            hiddenChildren: children.slice(maxVisible)
+          };
+
+          allNodesData.push(expandButtonNode);
+
+          if (!nodeChildren[nodeId]) {
+            nodeChildren[nodeId] = [];
+          }
+          nodeChildren[nodeId].push(expandButtonId);
+          nodeParent[expandButtonId] = nodeId;
+
+          const expandButtonEdge = {
+            from: nodeId,
+            to: expandButtonId,
+            hidden: false,
+            color: { color: '#848484' },
+            dashes: true
+          };
+          allEdgesData.push(expandButtonEdge);
+
+        } else {
+          // 显示所有子节点
+          children.forEach(childId => {
+            const nodeIndex = allNodesData.findIndex(n => n.id === childId);
+            if (nodeIndex !== -1) {
+              allNodesData[nodeIndex].hidden = false;  // 设置为可见
+            }
+
+            allEdgesData.forEach(edge => {
+              if (edge.from === nodeId && edge.to === childId) {
+                edge.hidden = false;  // 显示相关的边
+              }
+            });
+          });
+        }
+      }
+
+      function updateNetworkDisplay() {
+        const visibleNodes = allNodesData.filter(node => !node.hidden);
+        const visibleEdges = allEdgesData.filter(edge => !edge.hidden);
+
+        nodes.update(visibleNodes);
+        edges.update(visibleEdges);
+
+        // 添加新节点
+        const currentNodeIds = new Set(nodes.getIds());
+        const newNodes = visibleNodes.filter(node => !currentNodeIds.has(node.id));
+        if (newNodes.length > 0) {
+          nodes.add(newNodes);
+          conole.log("%%%%%%%%%%%", nodes)
+        }
+
+        // 移除隐藏的节点
+        const visibleNodeIds = new Set(visibleNodes.map(node => node.id));
+        const nodesToRemove = nodes.getIds().filter(id => !visibleNodeIds.has(id));
+        if (nodesToRemove.length > 0) {
+          nodes.remove(nodesToRemove);
+        }
+
+        // 添加新边
+        const currentEdgeIds = new Set(edges.getIds());
+        const newEdges = visibleEdges.filter(edge => !currentEdgeIds.has(edge.id || `${edge.from}-${edge.to}`));
+        if (newEdges.length > 0) {
+          edges.add(newEdges);
+        }
+
+        // 移除隐藏的边
+        const visibleEdgeIds = new Set(visibleEdges.map(edge => edge.id || `${edge.from}-${edge.to}`));
+        const edgesToRemove = edges.getIds().filter(id => {
+          const edge = edges.get(id);
+          return !visibleEdgeIds.has(id) && !visibleEdgeIds.has(`${edge.from}-${edge.to}`);
+        });
+        if (edgesToRemove.length > 0) {
+          edges.remove(edgesToRemove);
+        }
+      }
+
+      // 创建DataSet实例
+      nodes = new vis.DataSet(visibleNodes);  // nodes 是 vis.DataSet 实例，用于存储网络中显示的节点数据
+      edges = new vis.DataSet(visibleEdges);  // edges 是 vis.DataSet 实例，用于存储网络中显示的边数据
+      console.log('!!!Nodes and edges initialized:', nodes, edges, toggleNodeChildren, allNodesData, allEdgesData, nodeParent, expandedNodes);
+      return {
+        nodes: nodes,
+        edges: edges,
+        toggleNodeChildren: toggleNodeChildren,
+        allNodesData: allNodesData,
+        allEdgesData: allEdgesData,
+        nodeChildren: nodeChildren,
+        nodeParent: nodeParent,
+        expandedNodes: expandedNodes
+      };
+    }
+
+
+
+
+
+    // ==================== 加载和初始化 ====================
+    Promise.all([
+      fetch('./data/webui.json').then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP error loading webui.json! status: ${response.status}`);
+        }
+        return response.json();
+      }),
+      fetch('./data/map.json').then(response => {
+        if (!response.ok) {
+          console.warn('map.json not found or could not be loaded');
+          return null;
+        }
+        return response.json();
+      }).catch(error => {
+        console.warn('Error loading map.json:', error);
+        return null;
+      })
+    ])
+      .then(([jsonData, mapJsonData]) => {
+        // 存储map.json数据
+        mapData = mapJsonData;
+
+        if (mapData) {
+          console.log('Successfully loaded map.json:', mapData);
+        }
+
+        const graphData = processData(jsonData);
+
+        // 生成左侧关系网络图
+        generateRelationshipNetwork(jsonData);
+
+        const container = document.getElementById('mynetwork');
+
+        // ==================== 网络配置选项 ====================
+        const options = {
+          layout: {
+            hierarchical: {
+              enabled: true,
+              levelSeparation: 260,
+              nodeSpacing: 60,
+              treeSpacing: 100,
+              direction: 'LR',
+              sortMethod: 'directed',
+              shakeTowards: 'roots',
+              blockShifting: true,
+              edgeMinimization: true,
+              parentCentralization: true,
+            }
+          },
+          interaction: {
+            dragNodes: true,
+            zoomView: true,
+            dragView: true,
+            hover: true,
+            tooltipDelay: 200
+          },
+          physics: {
+            enabled: false
+          },
+          nodes: {
+            borderWidth: 1,
+            borderWidthSelected: 4,
+            shapeProperties: {
+              borderRadius: 6
+            },
+            font: {
+              size: 12,
+              face: 'Arial, sans-serif',
+              color: '#333333'
+            },
+            shadow: {
+              enabled: true,
+              color: 'rgba(0,0,0,0.2)',
+              size: 5,
+              x: 2,
+              y: 2
+            },
+            widthConstraint: { minimum: 60 },
+            heightConstraint: { minimum: 20 },
+            margin: 5,
+            chosen: {
+              node: function (values, id, selected, hovering) {
+                if (hovering) {
+                  values.shadow = true;
+                  values.shadowSize = 10;
+                }
+                if (selected) {
+                  values.borderWidth = 2;
+                  values.borderColor = '#2B7CE9';
+                  values.shadow = true;
+                  values.shadowSize = 15;
+                  values.shadowColor = 'rgba(43, 124, 233, 0.5)';
+                }
+              },
+              label: false
+            }
+          },
+          edges: {
+            width: 1,
+            color: { color: '#848484', highlight: '#505050', hover: '#505050' },
+            arrows: {
+              to: { enabled: true, scaleFactor: 0.8, type: 'arrow' }
+            },
+            smooth: {
+              enabled: true,
+              type: "cubicBezier",
+              forceDirection: "vertical",
+              roundness: 0.2
+            },
+            hoverWidth: 1,
+            chosen: true
+          }
+        };
+
+        const network = new vis.Network(container, graphData, options);
+
+        // ==================== 设置节点hover效果 ====================
+        network.setOptions({
+          nodes: {
+            chosen: {
+              node: function (values, id, selected, hovering) {
+                if (hovering) {
+                  values.shadow = true;
+                  values.shadowSize = 10;
+                  const node = graphData.allNodesData.find(n => n.id === id);
+                  if (node && node.font) {
+                    values.font = Object.assign({}, node.font);
+                  }
+                }
+                if (selected) {
+                  values.borderWidth = 2;
+                  values.borderColor = '#2B7CE9';
+                  values.shadow = true;
+                  values.shadowSize = 15;
+                  values.shadowColor = 'rgba(43, 124, 233, 0.5)';
+                }
+              },
+              label: false
+            }
+          },
+          edges: {
+            chosen: true
+          }
+        });
+
+        network.on('stabilizationIterationsDone', () => {
+          network.setOptions({ physics: false });
+        });
+
+        // ==================== 存储全局数据引用 ====================
+        window.nodes = graphData.nodes;
+        window.edges = graphData.edges;
+        window.toggleNodeChildren = graphData.toggleNodeChildren;
+        window.nodeChildren = graphData.nodeChildren;
+        window.nodeParent = graphData.nodeParent;
+        window.currentModalNodeId = null;
+        window.selectedNodeId = null;
+        window.graphData = graphData;
+        window.mainNetwork = network;  // 添加主网络的引用
+
+        // ==================== 添加事件监听器 ====================
+        network.on("click", function (params) {
+          if (params.event.srcEvent) {
+            params.event.srcEvent.stopPropagation();
+          }
+
+          if (params.nodes.length > 0) {
+            const nodeId = params.nodes[0];
+
+            network.selectNodes([nodeId]);
+            window.selectedNodeId = nodeId;
+
+            const clickedNode = graphData.allNodesData.find(n => n.id === nodeId);
+            if (clickedNode && clickedNode.isExpandButton) {
+              handleExpandButtonClick(clickedNode);
+              return;
+            }
+
+            if (window.currentModalNodeId === nodeId) {
+              closeModal();
+              if (graphData.nodeChildren[nodeId] && graphData.nodeChildren[nodeId].length > 0) {
+                graphData.toggleNodeChildren(nodeId);  // 这里触发展开/收起
+              }
+              window.currentModalNodeId = null;
+            } else {
+              closeModal();
+
+              const nodeData = graphData.allNodesData.find(n => n.id === nodeId);
+              const hasChildren = graphData.nodeChildren[nodeId] && graphData.nodeChildren[nodeId].length > 0;
+
+              if (hasChildren) {
+                graphData.toggleNodeChildren(nodeId);  // 这里触发展开/收起
+
+                setTimeout(() => {
+                  const nodePosition = network.getPositions([nodeId]);
+                  const canvasPosition = network.canvasToDOM(nodePosition[nodeId]);
+                  showNodeModal(nodeId, graphData.allNodesData, canvasPosition);
+                  window.currentModalNodeId = nodeId;
+                }, 200);
+              } else {
+                setTimeout(() => {
+                  const nodePosition = network.getPositions([nodeId]);
+                  const canvasPosition = network.canvasToDOM(nodePosition[nodeId]);
+                  showNodeModal(nodeId, graphData.allNodesData, canvasPosition);
+                  window.currentModalNodeId = nodeId;
+                }, 50);
+              }
+            }
+          } else {
+            closeModal();
+            window.currentModalNodeId = null;
+            network.unselectAll();
+            window.selectedNodeId = null;
+          }
+        });
+
+        network.on("hoverNode", function (params) {
+          const nodeId = params.node;
+          if (graphData.nodeChildren[nodeId] && graphData.nodeChildren[nodeId].length > 0) {
+            container.style.cursor = 'pointer';
+          }
+        });
+
+        network.on("blurNode", function (params) {
+          container.style.cursor = 'default';
+        });
+      })
+      .catch(error => {
+        console.error('Error loading or processing JSON data:', error);
+        const container = document.getElementById('mynetwork');
+        container.innerHTML = `<p style="color: red; text-align: center;">Error loading visualization: ${error.message}. Please check the console for more details and ensure webui.json is in the same directory.</p>`;
+      });
+
+    // ==================== 弹窗相关函数 ====================
+
+    /**
+     * 显示节点信息弹窗
+     * @param {number} nodeId - 节点ID
+     * @param {Array} allNodesData - 所有节点数据
+     * @param {Object} nodePosition - 节点位置
+     */
+    function showNodeModal(nodeId, allNodesData, nodePosition) {
+      console.log("showNodeModal", nodeId, allNodesData, nodePosition);
+      const node = allNodesData.find(n => n.id === nodeId);
+
+      if (!node) return;
+      console.log(node);
+
+      const modal = document.getElementById('nodeModal');
+      const modalTitle = document.getElementById('modalTitle');
+      const modalBody = document.getElementById('modalBody');
+      const container = document.getElementById('mynetwork');
+
+      // 设置标题
+      modalTitle.textContent = node.originalLabel || node.label;
+
+      // 构建节点基本信息
+      let infoHtml = '';
+
+      infoHtml += `<div class="info-item">
+      <span class="info-label">node:</span>
+      <span class="info-value">${node.label}</span>
+    </div>`;
+
+      if (node.title) {
+        infoHtml += `<div class="info-item">
+        <span class="info-label">feature_path:</span>
+        <span class="info-value">${node.title}</span>
+      </div>`;
+      }
+
+      infoHtml += `<div class="info-item">
+      <span class="info-label">index:</span>
+      <span class="info-value">${node.level}</span>
+    </div>`;
+
+
+      if (window.nodeChildren && window.nodeChildren[nodeId]) {
+        infoHtml += `<div class="info-item">
+        <span class="info-label">子节点数量:</span>
+        <span class="info-value">${window.nodeChildren[nodeId].length}</span>
+      </div>`;
+      }
+
+      // ==================== 处理 map.json 内容 ====================
+      if (mapData) {
+        const nodeLabel = node.originalLabel || node.label;
+        console.log('Looking for node label in map.json:', nodeLabel);
+
+        // 直接使用节点中存储的根节点信息
+        const rootNodeId = node.rootId || nodeId;
+        const rootNodeLabel = node.rootLabel || nodeLabel;
+
+        // 判断当前节点是否为根节点（level为0的节点）
+        const isRootNode = node.level === 0;
+
+        if (isRootNode) {
+          console.log('当前节点是根节点，不在 map.json 中查找');
+          // infoHtml += `<div class="info-item">
+          //   <span class="info-label">node:</span>
+          //   <span class="info-value">${node.label}</span>
+          // </div>`;
+
+          //         // if (node.title) {
+          //         //   infoHtml += `<div class="info-item">
+          //         //     <span class="info-label">feature_path:</span>
+          //         //     <span class="info-value">${node.title}</span>
+          //         //   </div>`;
+          //         // }
+        } else {
+          console.log('Root node found:', rootNodeLabel);
+
+          let mapContent = null;
+
+          console.log('正在查找 map.json 中的内容...');
+
+          const searchData = mapData.metadata || mapData;
+
+          // 在map.json中查找对应的内容
+          if (searchData[rootNodeLabel]) {
+            const rootData = searchData[rootNodeLabel];
+            console.log('Found root node data:', rootData);
+
+            // 处理数组类型的数据
+            if (Array.isArray(rootData)) {
+              console.log('Root data is an array, searching for:', nodeLabel);
+              console.log('Node feature_path:', node.title);
+
+              // 精确匹配：同时匹配 node 和 feature_path
+              let matchedItem = rootData.find(item => {
+                if (typeof item === 'object' && item !== null) {
+                  // 检查 node 字段匹配
+                  const nodeMatch = item.node === nodeLabel;
+                  // 检查 feature_path 字段匹配
+                  const pathMatch = `${rootNodeLabel}/${item.feature_path}` === node.title;
+
+                  if (nodeMatch && pathMatch) {
+                    console.log('找到完全匹配的项:', item);
+                    return true;
+                  } else if (nodeMatch && !pathMatch) {
+                    console.log('节点名匹配但路径不匹配:', {
+                      expected_path: node.title,
+                      item_path: item.feature_path
+                    });
+                  }
+                  return false;
+                }
+                return false;
+              });
+
+              if (matchedItem) {
+                console.log('Found matched item with matching node and feature_path:', matchedItem);
+                if (typeof matchedItem === 'object') {
+                  mapContent = matchedItem.content ||
+                    matchedItem.description ||
+                    matchedItem.detail ||
+                    matchedItem.info ||
+                    JSON.stringify(matchedItem, null, 2);
+                } else {
+                  mapContent = matchedItem;
+                }
+              } else {
+                console.log('未找到同时匹配 node 和 feature_path 的项');
+              }
+            }
+            // 处理对象类型的数据
+            else if (typeof rootData === 'object') {
+              if (rootData[nodeLabel]) {
+                mapContent = rootData[nodeLabel];
+              }
+            }
+            // 处理字符串类型的数据
+            else if (typeof rootData === 'string') {
+              mapContent = rootData;
+            }
+          } else {
+            console.log('Root node not found in map.json:', rootNodeLabel);
+          }
+
+          // 显示map.json内容
+          if (mapContent) {
+            console.log('Map content found:', mapContent);
+
+            infoHtml += '<div class="map-content">';
+            infoHtml += '<div class="map-content-title">详细内容</div>';
+            infoHtml += '<div class="map-content-body">';
+
+            if (typeof mapContent === 'string') {
+              infoHtml += mapContent.replace(/\n/g, '<br>');
+            } else if (typeof mapContent === 'object') {
+              infoHtml += JSON.stringify(mapContent, null, 2);
+            } else {
+              infoHtml += String(mapContent);
+            }
+
+            infoHtml += '</div>';
+            infoHtml += '</div>';
+          } else {
+            console.log('No map content found for:', nodeLabel, 'under root:', rootNodeLabel);
+            infoHtml += '<div class="map-content">';
+            infoHtml += '<div class="map-content-title">详细内容</div>';
+            infoHtml += '<div class="map-content-body" style="color: #999; font-style: italic;">未在 map.json 中找到相关内容<br>根节点: ' + rootNodeLabel + '<br>当前节点: ' + nodeLabel + '</div>';
+            infoHtml += '</div>';
+          }
+        }
+      } else {
+        console.warn('mapData is null or undefined in showNodeModal');
+      }
+
+      modalBody.innerHTML = infoHtml;
+      console.log('Modal content:', infoHtml);
+
+      // ==================== 计算弹窗位置 ====================
+      const containerRect = container.getBoundingClientRect();
+      const modalWidth = 400;
+      const modalHeight = 350;
+
+      const nodeWidth = Math.max(node.widthConstraint?.minimum || 100, 100);
+
+      let left = nodePosition.x + (nodeWidth / 2) + 20;
+      let top = nodePosition.y - (modalHeight / 2);
+
+      if (left + modalWidth > containerRect.width) {
+        left = nodePosition.x - (nodeWidth / 2) - modalWidth - 20;
+      }
+
+      if (top < 10) {
+        top = 10;
+      } else if (top + modalHeight > containerRect.height - 10) {
+        top = containerRect.height - modalHeight - 10;
+      }
+
+      modal.style.left = left + 'px';
+      modal.style.top = top + 'px';
+
+      modal.classList.add('show');
+
+      initModalDrag();
+    }
+
+    /**
+     * 初始化弹窗拖拽功能
+     */
+    function initModalDrag() {
+      const modal = document.getElementById('nodeModal');
+      const header = modal.querySelector('.modal-header');
+      let isDragging = false;
+      let startX, startY, initialLeft, initialTop;
+
+      header.onmousedown = function (e) {
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+
+        const rect = modal.getBoundingClientRect();
+        initialLeft = rect.left;
+        initialTop = rect.top;
+
+        e.preventDefault();
+
+        document.onmousemove = function (e) {
+          if (!isDragging) return;
+
+          const deltaX = e.clientX - startX;
+          const deltaY = e.clientY - startY;
+          let newLeft = initialLeft + deltaX;
+          let newTop = initialTop + deltaY;
+
+          const container = document.getElementById('mynetwork');
+          const containerRect = container.getBoundingClientRect();
+          const modalRect = modal.getBoundingClientRect();
+
+          newLeft = Math.max(0, Math.min(newLeft, containerRect.width - modalRect.width));
+          newTop = Math.max(0, Math.min(newTop, containerRect.height - modalRect.height));
+
+          modal.style.left = newLeft + 'px';
+          modal.style.top = newTop + 'px';
+        };
+
+        document.onmouseup = function () {
+          isDragging = false;
+          document.onmousemove = null;
+          document.onmouseup = null;
+        };
+      };
+    }
+
+    /**
+     * 关闭弹窗
+     */
+    function closeModal() {
+      const modal = document.getElementById('nodeModal');
+      modal.classList.remove('show');
+      window.currentModalNodeId = null;
+    }
+
+    // 点击弹窗外部关闭
+    document.addEventListener('click', function (event) {
+      const modal = document.getElementById('nodeModal');
+      if (!modal.classList.contains('show')) return;
+
+      if (!modal.contains(event.target) && !event.target.closest('#mynetwork')) {
+        closeModal();
+      }
+    });
+
+    /**
+     * 处理扩展按钮点击
+     * @param {Object} expandButtonNode - 扩展按钮节点
+     */
+    function handleExpandButtonClick(expandButtonNode) {
+      const parentId = expandButtonNode.parentId;
+      const hiddenChildren = expandButtonNode.hiddenChildren;
+
+      // 显示所有隐藏的子节点
+      hiddenChildren.forEach(childId => {
+        const nodeIndex = window.graphData.allNodesData.findIndex(n => n.id === childId);
+        if (nodeIndex !== -1) {
+          window.graphData.allNodesData[nodeIndex].hidden = false;
+        }
+
+        window.graphData.allEdgesData.forEach(edge => {
+          if (edge.from === parentId && edge.to === childId) {
+            edge.hidden = false;
+          }
+        });
+      });
+
+      // 移除扩展按钮
+      const buttonIndex = window.graphData.allNodesData.findIndex(n => n.id === expandButtonNode.id);
+      if (buttonIndex !== -1) {
+        window.graphData.allNodesData.splice(buttonIndex, 1);
+      }
+
+      const edgeIndex = window.graphData.allEdgesData.findIndex(edge => edge.to === expandButtonNode.id);
+      if (edgeIndex !== -1) {
+        window.graphData.allEdgesData.splice(edgeIndex, 1);
+      }
+
+      if (window.nodeChildren[parentId]) {
+        const childIndex = window.nodeChildren[parentId].indexOf(expandButtonNode.id);
+        if (childIndex !== -1) {
+          window.nodeChildren[parentId].splice(childIndex, 1);
+        }
+      }
+
+      window.graphData.nodes.remove(expandButtonNode.id);
+      const edgeToRemove = window.graphData.edges.get().find(edge => edge.to === expandButtonNode.id);
+      if (edgeToRemove) {
+        window.graphData.edges.remove(edgeToRemove.id);
+      }
+
+      // 更新网络显示
+      const visibleNodes = window.graphData.allNodesData.filter(node => !node.hidden);
+      const visibleEdges = window.graphData.allEdgesData.filter(edge => !edge.hidden);
+
+      window.graphData.nodes.update(visibleNodes);
+      window.graphData.edges.update(visibleEdges);
+    }
+
+    // ==================== 左侧关系网络图函数 ====================
+
+    /**
+     * 生成左侧关系网络图
+     * @param {Object} data - 原始数据
+     */
+    function generateRelationshipNetwork(data) {
+      if (!data.subtrees || !data.data_flow_graph) {
+        console.warn('Missing subtrees or data_flow_graph data');
+        return;
+      }
+
+      const nodes = [];
+      const edges = [];
+
+      // 自定义节点顺序 - 可以根据需要调整这个数组的顺序
+      const customOrder = [
+        
+        'Workflow', 
+        
+        'Data Engineering',
+        'Algorithms',
+        'Advanced Modeling Techniques',
+      ];
+
+      // 使用自定义顺序，如果自定义顺序中没有的节点，则按原始顺序添加到末尾
+      const nodeNames = data.subtrees.map(s => s.name);
+      const orderedNodeNames = [];
+      
+      // 先添加自定义顺序中的节点
+      customOrder.forEach(customName => {
+        if (nodeNames.includes(customName)) {
+          orderedNodeNames.push(customName);
+        }
+      });
+      
+      // 再添加不在自定义顺序中的节点
+      nodeNames.forEach(nodeName => {
+        if (!customOrder.includes(nodeName)) {
+          orderedNodeNames.push(nodeName);
+        }
+      });
+
+      const nodePositions = calculateCirclePositions(orderedNodeNames.length, 220);
+
+      orderedNodeNames.forEach((nodeName, index) => {
+        const subtree = data.subtrees.find(s => s.name === nodeName);
+        if (subtree) {
+          nodes.push({
+            id: nodeName,
+            label: nodeName,
+            x: nodePositions[index].x,
+            y: nodePositions[index].y,
+            color: {
+              border: '#6495ED',
+              background: '#E6E6FA',
+              highlight: { border: '#4149E1', background: '#D8BFD8' }
+            },
+            font: { size: 14, color: '#000', bold: true },
+            shape: 'box',
+            widthConstraint: { minimum: 130, maximum: 130 },
+            heightConstraint: { minimum: 40, maximum: 60 },
+            fixed: true
+          });
+        }
+      });
+
+      data.data_flow_graph.forEach(flow => {
+        edges.push({
+          from: flow.from,
+          to: flow.to,
+          arrows: 'to',
+          label: flow.data_type,
+          font: { 
+            align: 'middle',
+            size: 10,
+            color: '#000',
+            strokeWidth: 2,
+            strokeColor: '#ffffff',
+            background: '#ffffff'
+          },
+          color: { color: '#5A97F2' },
+        })
+      });
+
+      const container = document.getElementById('relationshipNetwork');
+      const networkData = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
+
+      const options = {
+        layout: {
+          randomSeed: 2  // 固定随机种子以保持布局一致性
+        },
+        edges: {
+          arrows: {
+            to: { enabled: true, scaleFactor: 0.6 }
+          },
+          // smooth: {
+          //   enabled: true,
+          //   type: 'cubicBezier',
+          //   roundness: 0.4
+          // }
+        },
+        physics: {
+          enabled: true,
+          stabilization: { iterations: 100 },
+          barnesHut: {
+            gravitationalConstant: -2000,
+            centralGravity: 0.1,
+            springLength: 150,
+            springConstant: 0.04,
+            damping: 0.09,
+            avoidOverlap: 0.5
+          }
+        },
+        interaction: {
+          hover: true,
+          tooltipDelay: 100
+        },
+        nodes: {
+          font: { size: 14 }
+        }
+      }
+      const leftNetwork = new vis.Network(container, networkData, options);
+
+      // 添加左侧节点点击事件
+      leftNetwork.on("click", function (params) {
+        if (params.nodes.length > 0) {
+          const clickedNodeName = params.nodes[0];
+          console.log('左侧点击节点:', clickedNodeName);
+
+          // 在右侧网络中查找对应的根节点
+          if (window.graphData && window.mainNetwork) {
+            // 查找具有相同标签的根节点
+            const rightNode = window.graphData.allNodesData.find(node =>
+              node.label === clickedNodeName &&
+              node.level === 0  // 确保是根节点
+            );
+
+            if (rightNode) {
+              console.log('找到右侧对应节点:', rightNode);
+
+              // 清除之前的选择
+              window.mainNetwork.unselectAll();
+
+              // 选中右侧对应的节点
+              window.mainNetwork.selectNodes([rightNode.id]);
+              window.selectedNodeId = rightNode.id;
+
+              // 获取节点位置
+              const nodePosition = window.mainNetwork.getPositions([rightNode.id]);
+              const canvasPosition = window.mainNetwork.canvasToDOM(nodePosition[rightNode.id]);
+
+              // 关闭之前的弹窗
+              closeModal();
+
+              // 检查是否有子节点
+              const hasChildren = window.nodeChildren[rightNode.id] &&
+                window.nodeChildren[rightNode.id].length > 0;
+
+              if (hasChildren) {
+                // 切换节点展开/收起状态
+                window.toggleNodeChildren(rightNode.id);
+
+                // 延迟显示弹窗，等待展开动画完成
+                setTimeout(() => {
+                  showNodeModal(rightNode.id, window.graphData.allNodesData, canvasPosition);
+                  window.currentModalNodeId = rightNode.id;
+                }, 200);
+              } else {
+                // 直接显示弹窗
+                setTimeout(() => {
+                  showNodeModal(rightNode.id, window.graphData.allNodesData, canvasPosition);
+                  window.currentModalNodeId = rightNode.id;
+                }, 50);
+              }
+
+              // 将右侧节点居中显示
+              // window.mainNetwork.focus(rightNode.id, {
+              //   scale: 1,
+              //   animation: {
+              //     duration: 500,
+              //     easingFunction: 'easeInOutQuad'
+              //   }
+              // });
+            } else {
+              console.warn('未找到右侧对应的节点:', clickedNodeName);
+            }
+          }
+        }
+      });
+
+      // 添加悬停事件
+      leftNetwork.on("hoverNode", function (params) {
+        const hoveredNodeId = params.node;
+        const connectedEdges = leftNetwork.getConnectedEdges(hoveredNodeId);
+        const allEdges = networkData.edges.getIds();
+
+        // 改变鼠标样式为手型
+        container.style.cursor = 'pointer';
+
+        const hoveredNode = networkData.nodes.get(hoveredNodeId);
+        const updatedNode = {
+          ...hoveredNode,
+          color: {
+            border: '#4149E1',
+            background: '#D8BFD8',
+            highlight: { border: '#4149E1', background: '#D8BFD8' }
+          }
+        };
+        networkData.nodes.update(updatedNode);
+
+        // 更新所有边
+        const updatedEdges = allEdges.map(edgeId => {
+          const edge = networkData.edges.get(edgeId);
+          const isConnected = connectedEdges.includes(edgeId);
+          
+          return {
+            ...edge,
+            color: {
+              color: isConnected ? '#1A5FB4' : '#5A97F2',
+              highlight: '#1A5FB4',
+              hover: '#1A5FB4'
+            },
+            font: {
+              align: 'middle',
+              size: 10,
+              color: isConnected ? '#000' : 'transparent', // 非连接边的标签透明
+              strokeWidth: 2,
+              strokeColor: isConnected ? '#ffffff' : 'transparent', // 非连接边的描边透明
+              background: isConnected ? '#ffffff' : 'transparent', // 非连接边的背景透明
+              bold: isConnected
+            },
+            width: 1
+          };
+        });
+
+        networkData.edges.update(updatedEdges);
+      });
+
+      leftNetwork.on("blurNode", function (params) {
+        const blurredNodeId = params.node;
+        const allEdges = networkData.edges.getIds();
+
+        // 恢复鼠标样式
+        container.style.cursor = 'default';
+
+        const blurredNode = networkData.nodes.get(blurredNodeId);
+        const restoredNode = {
+          ...blurredNode,
+          color: {
+            border: '#6495ED',
+            background: '#E6E6FA',
+            highlight: { border: '#4149E1', background: '#D8BFD8' }
+          }
+        };
+        networkData.nodes.update(restoredNode);
+
+        // 恢复所有边
+        const restoredEdges = allEdges.map(edgeId => {
+          const edge = networkData.edges.get(edgeId);
+          return {
+            ...edge,
+            color: {
+              color: '#5A97F2',
+              highlight: '#1A5FB4',
+              hover: '#1A5FB4'
+            },
+            font: {
+              align: 'middle',
+              size: 10,
+              color: '#000', // 恢复所有标签颜色
+              strokeWidth: 2,
+              strokeColor: '#ffffff', // 恢复描边颜色
+              background: '#ffffff', // 恢复背景颜色
+              bold: false
+            },
+            width: 1
+          };
+        });
+
+        networkData.edges.update(restoredEdges);
+      });
+
+      // 添加边hover事件
+      leftNetwork.on("hoverEdge", function (params) {
+        const hoveredEdgeId = params.edge;
+        const allEdges = networkData.edges.getIds();
+
+        // 改变鼠标样式为手型
+        container.style.cursor = 'pointer';
+
+        // 更新所有边
+        const updatedEdges = allEdges.map(edgeId => {
+          const edge = networkData.edges.get(edgeId);
+          const isHovered = edgeId === hoveredEdgeId;
+          
+          return {
+            ...edge,
+            color: {
+              color: isHovered ? '#1A5FB4' : '#5A97F2',
+              highlight: '#1A5FB4',
+              hover: '#1A5FB4'
+            },
+            font: {
+              align: 'middle',
+              size: 10,
+              color: isHovered ? '#000' : 'transparent', // 非悬停边的标签透明
+              strokeWidth: 2,
+              strokeColor: isHovered ? '#ffffff' : 'transparent', // 非悬停边的描边透明
+              background: isHovered ? '#ffffff' : 'transparent', // 非悬停边的背景透明
+              bold: isHovered
+            },
+            width: isHovered ? 2 : 1
+          };
+        });
+
+        networkData.edges.update(updatedEdges);
+      });
+
+      leftNetwork.on("blurEdge", function (params) {
+        const allEdges = networkData.edges.getIds();
+
+        // 恢复鼠标样式
+        container.style.cursor = 'default';
+
+        // 恢复所有边
+        const restoredEdges = allEdges.map(edgeId => {
+          const edge = networkData.edges.get(edgeId);
+          return {
+            ...edge,
+            color: {
+              color: '#5A97F2',
+              highlight: '#1A5FB4',
+              hover: '#1A5FB4'
+            },
+            font: {
+              align: 'middle',
+              size: 10,
+              color: '#000', // 恢复所有标签颜色
+              strokeWidth: 2,
+              strokeColor: '#ffffff', // 恢复描边颜色
+              background: '#ffffff', // 恢复背景颜色
+              bold: false
+            },
+            width: 1
+          };
+        });
+
+        networkData.edges.update(restoredEdges);
+      });
+    }
+
+    /**
+     * 计算环形位置
+     * @param {number} nodeCount - 节点数量
+     * @param {number} radius - 半径
+     * @returns {Array} 位置数组
+     */
+    function calculateCirclePositions(nodeCount, radius) {
+      const positions = [];
+      const angleStep = (2 * Math.PI) / nodeCount;
+      const startAngle = -Math.PI ; // 从左上角开始（-3π/4）
+
+      for (let i = 0; i < nodeCount; i++) {
+        const angle = startAngle + i * angleStep;
+        positions.push({
+          x: Math.cos(angle) * radius,
+          y: Math.sin(angle) * radius
+        });
+      }
+
+      return positions;
+    }
+  </script>
+
+</body>
+
+</html>
