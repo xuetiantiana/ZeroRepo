@@ -1,0 +1,166 @@
+/* color palette from <https://github.com/vuejs/theme> */
+:root {
+  --text-color: rgba(47, 47, 47, 1);
+  --sub-text-color: rgba(114, 114, 114, 1);
+  --placeholder-color: rgba(183, 183, 183, 1);
+  --no-active-text-color: #C4C4C4;
+  /* --bg-color: rgba(24, 40, 69, 1); */
+  --bg-color: #fff;
+  --border-color: rgba(194, 194, 194, 1);
+  --gary-color: rgba(245, 245, 245, 1);
+  --el-tag-text-color: #fff;
+  --theme-color: #0b70c3;
+
+  --el-text-color-regular: var(--text-color)
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background: var(--vt-c-black);
+    --color-background-soft: var(--vt-c-black-soft);
+    --color-background-mute: var(--vt-c-black-mute);
+
+    --color-border: var(--vt-c-divider-dark-2);
+    --color-border-hover: var(--vt-c-divider-dark-1);
+
+    --color-heading: var(--vt-c-text-dark-1);
+    --color-text: var(--vt-c-text-dark-2);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  // font-weight: normal;
+}
+
+
+html {
+  // min-width: 1250px;
+  overflow-x: auto !important;
+  color: var(--text-color);
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.main-container {
+  /* max-width: 1720px;
+  padding-left: 1em;
+  padding-right: 1em;
+  width: 90%; */
+  width: 90%;
+  padding: 0 4em;
+  max-width: 2000px;
+  box-sizing: border-box;
+  margin: 0 auto;
+  // min-width: 1200px;
+}
+
+html,
+body {
+  font-size: 16px;
+}
+
+@media (max-width: 1280px) {
+
+  html,
+  body {
+    font-size: 14px;
+  }
+}
+
+
+@media (min-width: 2000px) {
+
+  html,
+  body {
+    font-size: 18px;
+  }
+}
+
+
+
+
+
+
+
+
+.el-button.btn {
+  height: 2.625rem !important;
+  font-size: 1.125rem !important;
+  border-radius: 2rem !important;
+  background: #fff;
+  font-weight: 600;
+  padding: 0 1.5rem !important;
+
+  svg {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  &.btn-border {
+    border: 2px solid #000;
+    color: #000;
+
+    .el-upload {
+      color: #000;
+    }
+
+    &:hover {
+      background: #fff;
+      border-color: #AF00FF;
+      color: #AF00FF;
+
+      .el-upload {
+        color: #AF00FF;
+      }
+    }
+
+    &.is-disabled {
+      background: #fff !important;
+      border-color: #999 !important;
+      color: #999 !important;
+
+      .el-upload {
+        color: #999;
+      }
+    }
+  }
+
+  &.btn-solid {
+    border: 0;
+    background: #000;
+    color: #fff;
+
+    .el-upload {
+      color: #fff;
+    }
+
+    &:hover {
+      background: #AF00FF;
+      color: #fff;
+
+      .el-upload {
+        color: #fff;
+      }
+    }
+
+    &.is-disabled {
+      background: #999 !important;
+      color: #fff !important;
+
+      .el-upload {
+        color: #fff;
+      }
+    }
+  }
+}
+
