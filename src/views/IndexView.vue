@@ -22,9 +22,16 @@
             ref="nodeModalRef"
             :class="{ show: modalVisible }"
           >
-            <div class="node-model-item">
+            <div
+              class="node-model-item"
+              style="
+                border: 2px solid #2b7ce9;
+                box-shadow: 0 8px 24px rgba(43, 124, 233, 0.4);
+              "
+            >
               <div class="modal-header">
                 <h3 class="modal-title">
+                  CurrNode:<br />
                   {{
                     currNode && currNode.metaData
                       ? currNode.metaData.node
@@ -61,11 +68,35 @@
               </div>
             </div>
           </div>
+          <div
+            style="
+              padding: 1em 1em 0;
+              border-top: 1px solid #aaa;
+              margin-top: 1em;
+            "
+          >
+            <el-select
+              v-model="searchValue"
+              filterable
+              placeholder="Type to search yours added nodes below..."
+              clearable
+              style="width: 100%"
+              @change="handleNodeSearch"
+            >
+              <el-option
+                v-for="(item, index) in selectedNodeList"
+                :key="item.id"
+                :label="item.metaData?.node || item.label"
+                :value="index"
+              />
+            </el-select>
+          </div>
           <div class="selected-nodes-box">
             <div ref="selectedNodesScrollContainer">
               <div
                 v-for="(currNode, index) in selectedNodeList"
                 :key="index"
+                :ref="(el) => setNodeItemRef(el, index)"
                 class="node-model-item"
               >
                 <div
@@ -132,7 +163,7 @@
 
 <script setup>
 import { ref, onMounted, nextTick } from "vue";
-import { ElMessage } from 'element-plus';
+import { ElMessage } from "element-plus";
 
 // 引入vis-network (需要安装: npm install vis-network)
 import { Network, DataSet } from "vis-network/standalone/esm/vis-network";
@@ -141,17 +172,25 @@ import { Network, DataSet } from "vis-network/standalone/esm/vis-network";
 const showDataFlowGraph = ref(true);
 const selectedNodeList = ref([]);
 const currNode = ref();
+const searchValue = ref("");
 const ColorList = [
-  "#FF5733",
-  "#33FF57",
-  "#3357FF",
-  "#F1C40F",
-  "#E74C3C",
-  "#8E44AD",
-  "#2ECC71",
-  "#3498DB",
-  "#E67E22",
-  "#1ABC9C",
+  "#71AD8A",
+  "#A27BBB",
+  "#7186C9",
+  "#ACD291",
+  "#E195D0",
+  "#ED8B5E",
+  "#96C8E0",
+  "#F3CF7F",
+  "#E38380",
+  "#C49361",
+  "#71AD8A",
+  "#A27BBB",
+  "#7186C9",
+  "#ACD291",
+  "#E195D0",
+  "#ED8B5E",
+  "#96C8E0",
 ];
 
 // 添加颜色使用追踪
@@ -166,6 +205,7 @@ const relationshipNetworkRef = ref(null);
 const mynetworkRef = ref(null);
 const nodeModalRef = ref(null);
 const selectedNodesScrollContainer = ref(null);
+const nodeItemRefs = ref({});
 const modalVisible = ref(false);
 const modalTitle = ref("节点信息");
 const modalContent = ref("");
@@ -260,8 +300,8 @@ onMounted(async () => {
         enabled: false,
       },
       nodes: {
-        borderWidth: 1,
-        borderWidthSelected: 4,
+        borderWidth: 0, // 移除边框
+        borderWidthSelected: 0, // 选中时也不显示边框
         shapeProperties: {
           borderRadius: 6,
         },
@@ -272,26 +312,28 @@ onMounted(async () => {
         },
         shadow: {
           enabled: true,
-          color: "rgba(0,0,0,0.2)",
-          size: 5,
-          x: 2,
-          y: 2,
+          color: "rgba(0,0,0,0.2)", // 增强阴影
+          size: 8, // 增大阴影尺寸
+          x: 3,
+          y: 3,
         },
         widthConstraint: { minimum: 60 },
         heightConstraint: { minimum: 20 },
         margin: 5,
         chosen: {
           node: function (values, id, selected, hovering) {
+            values.borderWidth = 0; // 确保不显示边框
             if (hovering) {
               values.shadow = true;
-              values.shadowSize = 10;
+              values.shadowSize = 12; // 悬停时增大阴影
+              values.shadowColor = "rgba(0,0,0,0.4)";
             }
             if (selected) {
               values.borderWidth = 2;
-              values.borderColor = "#2B7CE9";
+              values.borderColor = "#2B7CE9"; // 选中时蓝色边框
               values.shadow = true;
-              values.shadowSize = 15;
-              values.shadowColor = "rgba(43, 124, 233, 0.5)";
+              values.shadowSize = 25; // 选中时更大的阴影
+              values.shadowColor = "rgba(43, 124, 233, 0.8)"; // 选中时蓝色阴影
             }
           },
           label: false,
@@ -449,31 +491,35 @@ function drawNodeIcons(ctx) {
   if (node.isExpandButton) return;
 
   const pos = nodePositions[hoveredNodeId];
-  
+
   // 获取节点的实际边界框
   const nodeBoundingBox = mainNetwork.getBoundingBox(hoveredNodeId);
-  const actualNodeWidth = Math.abs(nodeBoundingBox.right - nodeBoundingBox.left);
-  const actualNodeHeight = Math.abs(nodeBoundingBox.bottom - nodeBoundingBox.top);
-  
-  console.log("实际节点尺寸:", { 
-    actualNodeWidth, 
+  const actualNodeWidth = Math.abs(
+    nodeBoundingBox.right - nodeBoundingBox.left
+  );
+  const actualNodeHeight = Math.abs(
+    nodeBoundingBox.bottom - nodeBoundingBox.top
+  );
+
+  console.log("实际节点尺寸:", {
+    actualNodeWidth,
     actualNodeHeight,
-    boundingBox: nodeBoundingBox 
+    boundingBox: nodeBoundingBox,
   });
-  
+
   // 计算图标位置（节点右上角）
   const iconX = pos.x + actualNodeWidth / 2 - 10; // 右上角X位置，向内偏移10像素
   const iconY = pos.y - actualNodeHeight / 2 + 5; // 右上角Y位置，基于实际节点高度计算
   // 图标半径根据缩放调整，保持合适的视觉大小
   const iconRadius = Math.max(6, Math.min(12, 8 * scale)); // 半径在6-12px之间
-  
-  console.log("绘制图标位置:", { 
-    nodePos: pos, 
-    actualNodeWidth, 
+
+  console.log("绘制图标位置:", {
+    nodePos: pos,
+    actualNodeWidth,
     actualNodeHeight,
-    iconX, 
+    iconX,
     iconY,
-    iconRadius 
+    iconRadius,
   });
 
   // 保存当前画布状态
@@ -487,15 +533,6 @@ function drawNodeIcons(ctx) {
   ctx.arc(iconX, iconY, iconRadius, 0, 2 * Math.PI);
   ctx.fill();
   ctx.stroke();
-
-  // 如果正在悬停图标，添加高亮效果
-  if (isHoveringIcon) {
-    ctx.strokeStyle = "#007bff";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(iconX, iconY, iconRadius + 2, 0, 2 * Math.PI);
-    ctx.stroke();
-  }
 
   // 绘制图标内容（文字或符号）
   ctx.fillStyle = getIconTextColor(node);
@@ -691,17 +728,19 @@ function getNodeIconText(node) {
   // 🏠 📋 📂 📄
   if (node.level === 0) {
     return "🏠"; // 根节点
-  } else if (node.isArrayContainer) {
-    return "+"; // 数组容器
   } else if (node.isExpandButton) {
     return "+"; // 展开按钮
-  } else if (
-    graphData.nodeChildren[node.id] &&
-    graphData.nodeChildren[node.id].length > 0
-  ) {
-    return "+"; // 叶子节点文档 有子节点的文件夹
   } else {
-    return "+"; // 叶子节点文档
+    // 检查节点是否已经在选中列表中
+    const isSelected = selectedNodeList.value.some(
+      (selectedNode) => selectedNode.id === node.id
+    );
+
+    if (isSelected) {
+      return "-"; // 已选中的节点显示减号
+    } else {
+      return "+"; // 未选中的节点显示加号
+    }
   }
 }
 
@@ -709,17 +748,19 @@ function getNodeIconText(node) {
 function getIconBackgroundColor(node) {
   if (node.level === 0) {
     return "#E3F2FD"; // 蓝色系 - 根节点
-  } else if (node.isArrayContainer) {
-    return "#F3E5F5"; // 紫色系 - 数组容器
   } else if (node.isExpandButton) {
     return "#FFF3E0"; // 橙色系 - 展开按钮
-  } else if (
-    graphData.nodeChildren[node.id] &&
-    graphData.nodeChildren[node.id].length > 0
-  ) {
-    return "#E8F5E8"; // 绿色系 - 有子节点
   } else {
-    return "#F5F5F5"; // 灰色系 - 叶子节点
+    // 检查节点是否已经在选中列表中
+    const isSelected = selectedNodeList.value.some(
+      (selectedNode) => selectedNode.id === node.id
+    );
+
+    if (isSelected) {
+      return "#FFEBEE"; // 红色系 - 已选中节点（显示减号）
+    } else {
+      return "#E8F5E8"; // 绿色系 - 未选中节点（显示加号）
+    }
   }
 }
 
@@ -727,17 +768,19 @@ function getIconBackgroundColor(node) {
 function getIconBorderColor(node) {
   if (node.level === 0) {
     return "#2196F3";
-  } else if (node.isArrayContainer) {
-    return "#9C27B0";
   } else if (node.isExpandButton) {
     return "#FF9800";
-  } else if (
-    graphData.nodeChildren[node.id] &&
-    graphData.nodeChildren[node.id].length > 0
-  ) {
-    return "#4CAF50";
   } else {
-    return "#757575";
+    // 检查节点是否已经在选中列表中
+    const isSelected = selectedNodeList.value.some(
+      (selectedNode) => selectedNode.id === node.id
+    );
+
+    if (isSelected) {
+      return "#F44336"; // 红色 - 已选中节点（显示减号）
+    } else {
+      return "#4CAF50"; // 绿色 - 未选中节点（显示加号）
+    }
   }
 }
 
@@ -756,8 +799,18 @@ function handleNodeIconClick(node, event) {
   } else if (node.isExpandButton) {
     // 展开按钮图标点击
   } else {
-    // 其他节点 以及叶子节点图标点击 - 添加到选中列表
-    addListWithColor(node.id, graphData.allNodesData);
+    // 检查节点是否已经在选中列表中
+    const isSelected = selectedNodeList.value.some(
+      (selectedNode) => selectedNode.id === node.id
+    );
+
+    if (isSelected) {
+      // 如果已选中，则从列表中移除
+      removeNodeFromSelectedList(node.id);
+    } else {
+      // 如果未选中，则添加到选中列表
+      addListWithColor(node.id, graphData.allNodesData);
+    }
   }
 
   // 阻止事件冒泡
@@ -801,8 +854,8 @@ function addListWithColor(nodeId, allNodesData) {
   if (selectedNodeList.value.length >= MAX_SELECTED_NODES) {
     ElMessage({
       message: `最多只能选择 ${MAX_SELECTED_NODES} 个节点`,
-      type: 'warning',
-      duration: 3000
+      type: "warning",
+      duration: 3000,
     });
     return;
   }
@@ -811,7 +864,8 @@ function addListWithColor(nodeId, allNodesData) {
   if (node) {
     // 检查是否已经存在该节点
     const exists = selectedNodeList.value.some(
-      (existingNode) => existingNode.id === node.id && existingNode.path === node.path
+      (existingNode) =>
+        existingNode.id === node.id && existingNode.path === node.path
     );
 
     if (!exists) {
@@ -827,14 +881,14 @@ function addListWithColor(nodeId, allNodesData) {
 
       selectedNodeList.value.unshift(node);
       showDataFlowGraph.value = false; // 切换到详细视图
-      
+
       // 滚动到列表顶部显示新添加的节点
       nextTick(() => {
         if (selectedNodesScrollContainer.value) {
           selectedNodesScrollContainer.value.scrollTop = 0;
         }
       });
-      
+
       console.log(
         "节点已添加到列表:",
         node.metaData?.node || node.label,
@@ -844,8 +898,8 @@ function addListWithColor(nodeId, allNodesData) {
     } else {
       ElMessage({
         message: "节点已存在，未重复添加",
-        type: 'info',
-        duration: 2000
+        type: "info",
+        duration: 2000,
       });
       console.log("节点已存在，未重复添加:", node.metaData?.node || node.label);
     }
@@ -857,24 +911,27 @@ function removeNodeFromSelectedList(nodeId) {
   const nodeIndex = selectedNodeList.value.findIndex(
     (selectedNode) => selectedNode.id === nodeId
   );
-  
+
   if (nodeIndex !== -1) {
     const nodeToRemove = selectedNodeList.value[nodeIndex];
-    
+
     // 恢复节点原始颜色
     if (nodeToRemove.id) {
       restoreNodeOriginalColor(nodeToRemove.id);
     }
-    
+
     // 释放颜色索引
     if (nodeToRemove.colorIndex !== undefined) {
       releaseColorIndex(nodeToRemove.colorIndex);
     }
-    
+
     // 从选中列表中移除节点
     selectedNodeList.value.splice(nodeIndex, 1);
-    
-    console.log("节点因隐藏而从列表中移除:", nodeToRemove.metaData?.node || nodeToRemove.label);
+
+    console.log(
+      "节点因隐藏而从列表中移除:",
+      nodeToRemove.metaData?.node || nodeToRemove.label
+    );
   }
 }
 
@@ -889,7 +946,7 @@ function updateNodeColorInNetwork(nodeId, color) {
       if (!node.originalColor && node.color) {
         node.originalColor = JSON.parse(JSON.stringify(node.color)); // 深拷贝原始颜色
       }
-      
+
       // 直接更新allNodesData中的颜色
       node.color = {
         background: color,
@@ -1206,7 +1263,7 @@ function processData(data) {
           });
         } else {
           localAllNodesData[nodeIndex].hidden = true;
-          
+
           // 当节点被隐藏时，从selectedNodeList中移除该节点
           removeNodeFromSelectedList(childId);
         }
@@ -1336,12 +1393,12 @@ function processData(data) {
 
   function updateNetworkDisplay() {
     // 应用选中节点的颜色到localAllNodesData
-    localAllNodesData.forEach(node => {
+    localAllNodesData.forEach((node) => {
       // 检查该节点是否在selectedNodeList中
       const selectedNode = selectedNodeList.value.find(
-        selected => selected.id === node.id
+        (selected) => selected.id === node.id
       );
-      
+
       if (selectedNode && selectedNode.selectedColor) {
         // 如果节点已被选中，应用选中的颜色
         node.color = {
@@ -1449,8 +1506,7 @@ function getNodeModalDetail(nodeId, allNodesData) {
           let matchedItem = rootData.find((item) => {
             if (typeof item === "object" && item !== null) {
               const nodeMatch = item.node === nodeLabel;
-              const pathMatch =
-                `${item.feature_path}` === node.title;
+              const pathMatch = `${item.feature_path}` === node.title;
               return nodeMatch && pathMatch;
             }
             return false;
@@ -1469,7 +1525,6 @@ function getNodeModalDetail(nodeId, allNodesData) {
   }
   return NodeModalDetail;
 }
-
 
 // 显示节点弹窗
 function showNodeModal(nodeId, allNodesData, nodePosition) {
@@ -1805,6 +1860,38 @@ function handleExpandButtonClick(expandButtonNode) {
   nodes.update(visibleNodes);
   edges.update(visibleEdges);
 }
+
+// 设置节点项的 ref
+function setNodeItemRef(el, index) {
+  if (el) {
+    nodeItemRefs.value[index] = el;
+  }
+}
+
+// 处理节点搜索
+function handleNodeSearch(selectedIndex) {
+  if (selectedIndex !== null && selectedIndex !== undefined) {
+    nextTick(() => {
+      const targetElement = nodeItemRefs.value[selectedIndex];
+      if (targetElement && selectedNodesScrollContainer.value) {
+        // 直接使用 scrollIntoView，更可靠的滚动方法
+        targetElement.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+          inline: "nearest",
+        });
+
+        // 备用方法：手动计算偏移量
+        // const containerElement = selectedNodesScrollContainer.value;
+        // const targetOffsetTop = targetElement.offsetTop;
+        // containerElement.scrollTo({
+        //   top: targetOffsetTop,
+        //   behavior: 'smooth'
+        // });
+      }
+    });
+  }
+}
 </script>
 
 <style scoped lang="scss">
@@ -1820,7 +1907,7 @@ function handleExpandButtonClick(expandButtonNode) {
 /* ==================== 左侧边栏样式 ==================== */
 .sidebar {
   max-width: 600px;
-  width: 30%;
+  width: 35%;
   background: #f8f9fa;
   border-right: 2px solid #dee2e6;
   overflow: hidden;
@@ -1848,7 +1935,6 @@ function handleExpandButtonClick(expandButtonNode) {
         padding: 1em;
       }
       .selected-nodes-box {
-        border-top: 1px solid #aaa;
         padding: 1em 0;
         flex: 1;
         overflow: hidden;
@@ -1943,7 +2029,7 @@ function handleExpandButtonClick(expandButtonNode) {
 
   .modal-body {
     padding: 15px;
-    max-height: 300px;
+    max-height: 200px;
     overflow-y: auto;
   }
 }
