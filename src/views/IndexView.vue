@@ -820,6 +820,28 @@ function addListWithColor(nodeId, allNodesData) {
   }
 }
 
+// 添加缺失的函数
+function closeNodeItemFromList(index) {
+  if (index >= 0 && index < selectedNodeList.value.length) {
+    const nodeToRemove = selectedNodeList.value[index];
+    
+    // 恢复节点原始颜色
+    if (nodeToRemove.id) {
+      restoreNodeOriginalColor(nodeToRemove.id);
+    }
+    
+    // 释放颜色索引
+    if (nodeToRemove.colorIndex !== undefined) {
+      releaseColorIndex(nodeToRemove.colorIndex);
+    }
+    
+    // 从选中列表中移除节点
+    selectedNodeList.value.splice(index, 1);
+    
+    console.log("节点已从列表中移除:", nodeToRemove.metaData?.node || nodeToRemove.label);
+  }
+}
+
 // 更新网络中节点的颜色
 function updateNodeColorInNetwork(nodeId, color) {
   try {
