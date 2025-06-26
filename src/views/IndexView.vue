@@ -448,12 +448,32 @@ function drawNodeIcons(ctx) {
   if (node.isExpandButton) return;
 
   const pos = nodePositions[hoveredNodeId];
-  const nodeWidth = node.widthConstraint?.minimum || 60;
-
-  // 计算图标位置（节点右侧偏移）
-  const iconX = pos.x + nodeWidth / 2 + 20; // 增加一点距离，方便鼠标移动
-  const iconY = pos.y;
-  const iconRadius = 10;
+  
+  // 获取节点的实际边界框
+  const nodeBoundingBox = mainNetwork.getBoundingBox(hoveredNodeId);
+  const actualNodeWidth = Math.abs(nodeBoundingBox.right - nodeBoundingBox.left);
+  const actualNodeHeight = Math.abs(nodeBoundingBox.bottom - nodeBoundingBox.top);
+  
+  console.log("实际节点尺寸:", { 
+    actualNodeWidth, 
+    actualNodeHeight,
+    boundingBox: nodeBoundingBox 
+  });
+  
+  // 计算图标位置（节点右上角）
+  const iconX = pos.x + actualNodeWidth / 2 - 10; // 右上角X位置，向内偏移10像素
+  const iconY = pos.y - actualNodeHeight / 2 + 5; // 右上角Y位置，基于实际节点高度计算
+  // 图标半径根据缩放调整，保持合适的视觉大小
+  const iconRadius = Math.max(6, Math.min(12, 8 * scale)); // 半径在6-12px之间
+  
+  console.log("绘制图标位置:", { 
+    nodePos: pos, 
+    actualNodeWidth, 
+    actualNodeHeight,
+    iconX, 
+    iconY,
+    iconRadius 
+  });
 
   // 保存当前画布状态
   ctx.save();
@@ -478,7 +498,9 @@ function drawNodeIcons(ctx) {
 
   // 绘制图标内容（文字或符号）
   ctx.fillStyle = getIconTextColor(node);
-  ctx.font = `bold ${Math.floor(12 / scale)}px Arial, sans-serif`;
+  // 修复字体大小逻辑，使图标文字大小保持相对一致或随缩放正确变化
+  const fontSize = Math.max(10, Math.min(16, 12 * scale)); // 字体大小在10-16px之间，根据缩放调整
+  ctx.font = `bold ${fontSize}px Arial, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
