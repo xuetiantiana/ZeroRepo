@@ -62,7 +62,7 @@
             </div>
           </div>
           <div class="selected-nodes-box">
-            <div>
+            <div ref="selectedNodesScrollContainer">
               <div
                 v-for="(currNode, index) in selectedNodeList"
                 :key="index"
@@ -82,7 +82,7 @@
                   </h3>
                   <button
                     class="close-btn"
-                    @click="closeNodeItemFromList(index)"
+                    @click="removeNodeFromSelectedList(currNode.id)"
                   >
                     &times;
                   </button>
@@ -165,6 +165,7 @@ const MAX_SELECTED_NODES = 10;
 const relationshipNetworkRef = ref(null);
 const mynetworkRef = ref(null);
 const nodeModalRef = ref(null);
+const selectedNodesScrollContainer = ref(null);
 const modalVisible = ref(false);
 const modalTitle = ref("节点信息");
 const modalContent = ref("");
@@ -824,7 +825,16 @@ function addListWithColor(nodeId, allNodesData) {
       // 更新节点在网络中的颜色
       updateNodeColorInNetwork(nodeId, colorInfo.color);
 
-      selectedNodeList.value.push(node);
+      selectedNodeList.value.unshift(node);
+      showDataFlowGraph.value = false; // 切换到详细视图
+      
+      // 滚动到列表顶部显示新添加的节点
+      nextTick(() => {
+        if (selectedNodesScrollContainer.value) {
+          selectedNodesScrollContainer.value.scrollTop = 0;
+        }
+      });
+      
       console.log(
         "节点已添加到列表:",
         node.metaData?.node || node.label,
@@ -842,10 +852,14 @@ function addListWithColor(nodeId, allNodesData) {
   }
 }
 
-// 添加缺失的函数
-function closeNodeItemFromList(index) {
-  if (index >= 0 && index < selectedNodeList.value.length) {
-    const nodeToRemove = selectedNodeList.value[index];
+// 从selectedNodeList中移除指定节点
+function removeNodeFromSelectedList(nodeId) {
+  const nodeIndex = selectedNodeList.value.findIndex(
+    (selectedNode) => selectedNode.id === nodeId
+  );
+  
+  if (nodeIndex !== -1) {
+    const nodeToRemove = selectedNodeList.value[nodeIndex];
     
     // 恢复节点原始颜色
     if (nodeToRemove.id) {
@@ -858,9 +872,9 @@ function closeNodeItemFromList(index) {
     }
     
     // 从选中列表中移除节点
-    selectedNodeList.value.splice(index, 1);
+    selectedNodeList.value.splice(nodeIndex, 1);
     
-    console.log("节点已从列表中移除:", nodeToRemove.metaData?.node || nodeToRemove.label);
+    console.log("节点因隐藏而从列表中移除:", nodeToRemove.metaData?.node || nodeToRemove.label);
   }
 }
 
@@ -1192,6 +1206,9 @@ function processData(data) {
           });
         } else {
           localAllNodesData[nodeIndex].hidden = true;
+          
+          // 当节点被隐藏时，从selectedNodeList中移除该节点
+          removeNodeFromSelectedList(childId);
         }
       }
 
