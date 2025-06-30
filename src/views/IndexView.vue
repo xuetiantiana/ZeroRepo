@@ -39,35 +39,14 @@
                   }}
                 </h3>
               </div>
-              <div class="modal-body" v-if="currNode && currNode.metaData">
-                <div class="info-item">
-                  <span class="info-label">node:</span>
-                  <span class="info-value">{{ currNode.metaData.node }}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">feature_path:</span>
-                  <span class="info-value">{{
-                    currNode.metaData.feature_path
-                  }}</span>
-                </div>
-                <div
-                  v-for="(file_pat_item, index1) in currNode.metaData
-                    .file_paths"
-                  :key="index1"
-                  class="info-item"
-                >
-                  <div
-                    class="info-file_pat_"
-                    v-for="(value, key, index) in file_pat_item"
-                    :key="index"
-                  >
-                    <span class="info-label">{{ key }}:</span>
-                    <span class="info-value">{{ value }}</span>
-                  </div>
-                </div>
-              </div>
+              <nodeDetailComponent
+                v-if="currNode && currNode.metaData"
+                :currNode="currNode"
+              >
+              </nodeDetailComponent>
             </div>
           </div>
+
           <div
             style="
               padding: 1em 1em 0;
@@ -118,37 +97,11 @@
                     &times;
                   </button>
                 </div>
-                <div class="modal-body" v-if="currNode && currNode.metaData">
-                  <div class="info-item">
-                    <span class="info-label">node:</span>
-                    <span
-                      class="info-value"
-                      :style="{ color: currNode.selectedColor }"
-                      >{{ currNode.metaData.node }}</span
-                    >
-                  </div>
-                  <div class="info-item">
-                    <span class="info-label">feature_path:</span>
-                    <span class="info-value">{{
-                      currNode.metaData.feature_path
-                    }}</span>
-                  </div>
-                  <div
-                    v-for="(file_pat_item, index1) in currNode.metaData
-                      .file_paths"
-                    :key="index1"
-                    class="info-item"
-                  >
-                    <div
-                      class="info-file_pat_"
-                      v-for="(value, key, index) in file_pat_item"
-                      :key="index"
-                    >
-                      <span class="info-label">{{ key }}:</span>
-                      <span class="info-value">{{ value }}</span>
-                    </div>
-                  </div>
-                </div>
+                <nodeDetailComponent
+                  v-if="currNode && currNode.metaData"
+                  :currNode="currNode"
+                >
+                </nodeDetailComponent>
               </div>
             </div>
           </div>
@@ -164,6 +117,8 @@
 <script setup>
 import { ref, onMounted, nextTick } from "vue";
 import { ElMessage } from "element-plus";
+
+import nodeDetailComponent from "@/components/nodeDetailComponent.vue";
 
 // 引入vis-network (需要安装: npm install vis-network)
 import { Network, DataSet } from "vis-network/standalone/esm/vis-network";
@@ -2034,56 +1989,4 @@ function handleNodeSearch(selectedIndex) {
   }
 }
 
-/* ==================== Modal内容样式 ==================== */
-.info-item {
-  margin-bottom: 8px;
-  overflow-wrap: break-word; /* 新标准 */
-  word-wrap: break-word; /* 兼容旧浏览器 */
-
-  .info-label {
-    font-weight: bold;
-    color: #555;
-  }
-
-  .info-value {
-    margin-left: 10px;
-    color: #333;
-  }
-}
-
-/* ==================== Map.json 内容样式 ==================== */
-:deep(.map-content) {
-  margin-top: 15px;
-  padding-top: 15px;
-  border-top: 1px solid #ddd;
-}
-
-:deep(.map-content-title) {
-  font-weight: bold;
-  color: #333;
-  margin-bottom: 10px;
-}
-
-:deep(.map-content-body) {
-  color: #555;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  background: #f8f9fa;
-  padding: 10px;
-  border-radius: 4px;
-  font-family: "Consolas", "Monaco", monospace;
-}
-
-/* ==================== 图标相关样式提示 ==================== */
-.node-icon-info {
-  position: absolute;
-  background: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  pointer-events: none;
-  z-index: 1000;
-  white-space: nowrap;
-}
 </style>
