@@ -31,7 +31,7 @@
             >
               <div class="modal-header">
                 <h3 class="modal-title">
-                  CurrNode:<br />
+                  <span style="color: #2b7ce9;">CurrNode: &nbsp;</span>
                   {{
                     currNode && currNode.metaData
                       ? currNode.metaData.node
@@ -167,6 +167,7 @@ const modalContent = ref("");
 const modalPosition = ref({ left: 0, top: 0 });
 
 // 全局变量
+let jsonData = null; // 用于存储加载的JSON数据
 let mapData = null;
 let nodes,
   edges,
@@ -212,7 +213,7 @@ onMounted(async () => {
       );
     }
 
-    const jsonData = await jsonResponse.json();
+    jsonData = await jsonResponse.json();
 
     if (mapResponse && mapResponse.ok) {
       mapData = await mapResponse.json();
@@ -672,6 +673,69 @@ function setupCustomNodeRendering() {
   // 监听网络渲染完成事件，在节点右侧绘制图标
   mainNetwork.on("afterDrawing", function (ctx) {
     drawNodeIcons(ctx);
+
+    // ====== 新增：原生JS绘制根节点之间的连线 ======
+    if (!graphData || !graphData.allNodesData) return;
+    // 1. 找到所有根节点
+    const rootNodes = graphData.allNodesData.filter(n => n.level === 0 && !n.hidden);
+    // 2. 获取根节点id到节点对象的映射
+    const rootNodeMap = {};
+    rootNodes.forEach(n => { rootNodeMap[n.label] = n; });
+    console.log("根节点映射:", rootNodeMap);
+    // 3. 遍历 data_flow_graph，找到根节点之间的连线
+    console.log("绘制根节点之间的连线222",jsonData?.data_flow_graph);
+    if (Array.isArray(jsonData?.data_flow_graph)) {
+      console.log("绘制根节点之间的连线:", jsonData.data_flow_graph);
+      jsonData.data_flow_graph.forEach(flow => {
+        const fromNode = rootNodeMap[flow.from];
+        const toNode = rootNodeMap[flow.to];
+        if (fromNode && toNode) {
+          console.log("绘制连线:", {
+            from: fromNode.label,
+            to: toNode.label,
+          });
+          // 获取节点canvas坐标
+          const fromPos = mainNetwork.getPositions([fromNode.id])[fromNode.id];
+          const toPos = mainNetwork.getPositions([toNode.id])[toNode.id];
+          if (fromPos && toPos) {
+            const fromCanvas = mainNetwork.canvasToDOM(fromPos);
+            const toCanvas = mainNetwork.canvasToDOM(toPos);
+
+            // 反向转换为canvas坐标（afterDrawing ctx是canvas坐标系）
+            // 直接用 fromPos, toPos 即可
+            ctx.save();
+            ctx.strokeStyle = "#2B7CE9";
+            ctx.lineWidth = 2;
+            ctx.globalAlpha = 0.7;
+            ctx.beginPath();
+            console.log("绘制连线:", {
+              from: fromNode.label,
+              to: toNode.label,
+              fromPos,
+              toPos,
+            });
+            ctx.moveTo(fromPos.x, fromPos.y);
+            ctx.lineTo(toPos.x, toPos.y);
+            ctx.stroke();
+            ctx.restore();
+
+            // 可选：在连线中间加label
+            if (flow.data_type) {
+              ctx.save();
+              ctx.font = "bold 14px Arial";
+              ctx.fillStyle = "#2B7CE9";
+              ctx.textAlign = "center";
+              ctx.textBaseline = "middle";
+              const midX = (fromPos.x + toPos.x) / 2;
+              const midY = (fromPos.y + toPos.y) / 2;
+              ctx.fillText(flow.data_type, midX, midY - 8);
+              ctx.restore();
+            }
+          }
+        }
+      });
+    }
+    // ====== END ======
   });
 
   // 监听画布点击事件，用于图标点击检测
@@ -1177,6 +1241,63 @@ function processData(data) {
       }
     });
   }
+
+  // ==================== 处理数据流图 根节点之间的连线====================
+      if (data.data_flow_graph && Array.isArray(data.data_flow_graph)) {
+        console.log("？？？", nodeNameToId)
+        data.data_flow_graph.forEach(flow => {
+          const fromId = nodeNameToId[flow.from];
+          const toId = nodeNameToId[flow.to];
+          if (fromId && toId) {
+            const fromIndex = data.subtrees.findIndex(subtree => subtree.name === flow.from);
+            const toIndex = data.subtrees.findIndex(subtree => subtree.name === flow.to);
+
+            const isAdjacent = Math.abs(fromIndex - toIndex) === 1;
+
+            let edgeData = {
+              from: fromId,
+              to: toId,
+              arrows: 'to',
+              label: flow.data_type || flow.label || '',
+              color: { color: '#2B7CE9', highlight: '#2B7CE9', hover: '#2B7CE9' },
+              font: { 
+                // align: 'middle',
+                size: 12,
+                color: '#5A97F2',
+                strokeWidth: 2,
+                strokeColor: '#ffffff',
+                background: '#ffffff'
+              },
+              width: 1,
+              hidden: false
+            };
+
+            if (isAdjacent) {
+              edgeData.smooth = { enabled: false };
+            } else {
+              let curveType, roundness;
+
+              if (fromIndex < toIndex) {
+                curveType = 'curvedCCW';
+                roundness = 0.6;
+              } else {
+                curveType = 'curvedCW';
+                roundness = 1;
+              }
+
+              edgeData.smooth = {
+                type: curveType,
+                roundness: roundness
+              };
+            }
+
+            // localAllEdgesData.push(edgeData);
+          } else {
+            console.warn('Could not create edge for flow:', flow, 'due to missing node IDs.');
+          }
+        });
+      }
+
 
   // 初始化可见节点和边
   const visibleNodes = localAllNodesData.filter((node) => !node.hidden);
@@ -1989,4 +2110,25 @@ function handleNodeSearch(selectedIndex) {
   }
 }
 
+:deep(.el-radio-group){
+  border-radius: 20px;
+  padding: 3px 4px;
+  background: #ccc;
+  gap: 5px;
+  --el-font-size-base: 18px;
+  .el-radio-button__inner{
+    border: 0 !important;
+    border-radius: 20px !important;
+    color: #fff;
+    background: transparent;
+  }
+  .is-active {
+    .el-radio-button__inner{
+      background: #000 !important;
+      color: #fff !important;
+      // box-shadow:-1px 0 0 0 #000,#fff)
+      box-shadow:inset 0 0 0 1px #000 !important  ;
+    }
+  }
+}
 </style>
