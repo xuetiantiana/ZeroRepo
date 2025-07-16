@@ -33,8 +33,10 @@ onMounted(() => {
   fetch("./data/webui.json")
     .then((res) => res.json())
     .then((data) => {
+      setRootGraph(data.data_flow_graph)
       hancelData(data);
-      updateVisibleNodes(); // 初始只显示根和第二层
+      updateVisibleNodes(); // 只显示根和第二层
+      graphData = convertTreeToGraph(treeRoot); // 只显示可见节点和线
       initGraphChart(myChart);
     });
 
@@ -174,7 +176,7 @@ const hancelData = (data1) => {
         // 创建该组的根节点
         const groupRoot = {
           name: rootName,
-          feature_path: `${subtree.file_path || rootName}`,
+          feature_path: `${rootName}`,
           id: idCounter++,
           level: 1, // 根节点为第1层
           symbolSize: getSymbolSize(1), // 组根节点大小
@@ -273,19 +275,62 @@ const getLineStyle = (level) => {
   };
 };
 
-const getLabelPosition = (level) => {
+const getLabelPosition = (level, angle = 0, labelText = "", radius = 0) => {
+  if (level >= 5) {
+    // 让文本始终朝外，旋转角度与节点到圆心的方向一致
+    let deg = angle * 180 / Math.PI;
+    console.log("!!!!",angle,deg)
+    // if (deg > 90 && deg < 270) {
+    //   deg = deg + 180;
+    // }
+    // 估算label长度（每字符约7px，最小30px）
+    const minOffset = 30;
+    const charWidth = 7;
+    const labelLen = Math.max(minOffset, labelText.length * charWidth);
+
+    // 让label在圆环外一段距离（节点半径+节点大小/2+label长度/2+padding）
+    const padding = 24; // 适当加大padding
+    const nodeSize = 15;
+    // 关键：label的圆环半径 = 节点半径 + 节点大小/2 + padding
+    const labelCircleRadius = radius + nodeSize / 2 + padding;
+    const offsetR = (labelCircleRadius - radius) + labelLen / 2;   
+    return {
+      show: true,
+      position: 'inside', // 以节点为锚点
+      fontSize: 12,
+      color: "transparent",
+      fontWeight: "normal",
+      align: "center",
+      verticalAlign: "middle",
+      rotate: (deg > 90 && deg < 270) ? 180-deg: 180-deg-180,
+      // color :(deg > 90 && deg < 270) ? 'red' : 'blue',
+      // offset: [
+
+      //   offsetR * Math.cos(angle2),
+
+      //   offsetR * Math.sin(angle2)
+
+      // ],
+      // rotate: 180-deg-360,
+      // offset: [
+      //   // label在圆环上的坐标减去节点坐标，得到偏移
+      //   labelCircleRadius * Math.cos(angle) - radius * Math.cos(angle),
+      //   labelCircleRadius * Math.sin(angle) - radius * Math.sin(angle)
+      // ],
+    };
+  }
   let obj = {};
-  if (level >= 5 || level == 0) {
+  if (level == 0) {
     obj = {
-      fontSize: level == 5 ? 10 : 10,
-      color: level >= 5 ? "#333" : "#333",
-      fontWeight: level === 1 ? "bold" : "normal",
+      fontSize: 10,
+      color: "#333",
+      fontWeight: "normal",
     };
   } else {
     obj = {
       position: "inside",
-      fontSize: level == 5 ? 10 : 10,
-      color: level >= 5 ? "#333" : "#333",
+      fontSize: 10,
+      color: "#333",
       verticalAlign: "middle",
       align: "center",
       fontWeight: level === 1 ? "bold" : "normal",
@@ -304,7 +349,7 @@ const getRadiusForLevel = (level) => {
     2: 160, // 第二层距离中心160px
     3: 240, // 第三层距离中心240px
     4: 320, // 第四层距离中心320px
-    5: 680, // 第五层距离中心380px
+    5: 380, // 第五层距离中心380px
     6: 420, // 第六层及以上距离中心420px
   };
 
@@ -325,7 +370,7 @@ const convertTreeToGraph = (treeData) => {
     }
     return filtered;
   }
-  const filteredTree = filterVisible(treeData);
+  const filteredTree = filterVisible(treeData); // 只处理可见节点
   console.log("开始转换为 Graph 数据格式 treeData", filteredTree);
 
   const nodes = [];
@@ -357,22 +402,19 @@ const convertTreeToGraph = (treeData) => {
 
     // 计算当前节点的位置
     let currentAngle;
-    let x = 0,
-      y = 0;
+    let x = 0, y = 0;
 
     if (level === 0) {
-      // 根节点在中心
       x = 0;
       y = 0;
       currentAngle = 0;
     } else {
-      // 当前节点位于分配扇形的中心角度
       currentAngle = (sectorStart + sectorEnd) / 2;
       x = Math.cos(currentAngle) * currentRadius;
       y = Math.sin(currentAngle) * currentRadius;
     }
 
-    // 创建节点
+    // 传递label文本和半径给getLabelPosition
     const graphNode = {
       id: nodeId,
       name: node.name || "Unknown",
@@ -385,7 +427,7 @@ const convertTreeToGraph = (treeData) => {
       sectorEnd: sectorEnd,
       fixed: true, // 固定位置，保持径向布局
       symbolSize: node.symbolSize || getSymbolSize(level),
-      label: node.label || getLabelPosition(level),
+      label: getLabelPosition(level, currentAngle, node.name || "", currentRadius),
       itemStyle: node.itemStyle || getItemStyle(level),
       category: level, // 用于分类着色
     };
@@ -438,6 +480,9 @@ const convertTreeToGraph = (treeData) => {
   traverse(filteredTree, null, 0, 0, 2 * Math.PI);
 
   console.log("Graph 节点布局完成，节点数量:", nodes.length,nodes, links);
+  console.log(links,dataFlowGraph)
+  let result = [...links, ...dataFlowGraph];
+  console.log("!!!result",result)
   console.log(
     "扇形分配示例:",
     nodes
@@ -452,7 +497,7 @@ const convertTreeToGraph = (treeData) => {
       }))
   );
 
-  return { nodes, links };
+  return { "nodes":nodes, "links":result };
 };
 
 // 新增：只显示根节点和第二层节点
@@ -527,6 +572,20 @@ const initGraphChart = (myChart) => {
           content += `<strong>层级:</strong> ${nodeData.level}`;
           return content;
         }
+        // 只显示 rootLink 类型的边的弹窗
+        if (params.dataType === "edge" && params.data && params.data.type === "rootLink") {
+          let content = `<strong>数据流:</strong><br/>`;
+          content += `<strong>from:</strong> ${params.data.content.from}<br/>`;
+          content += `<strong>to:</strong> ${params.data.content.to}<br/>`;
+          if (params.data.label && params.data.label.formatter) {
+            content += `<strong>data_type:</strong> ${params.data.content.data_type}<br/>`;
+          }
+          return content;
+        }
+        // 其它类型的边不显示弹窗
+        if (params.dataType === "edge") {
+          return "";
+        }
         return params.name || "";
       },
     },
@@ -543,6 +602,7 @@ const initGraphChart = (myChart) => {
         layout: "none", // 使用固定位置布局
         roam: true, // 允许缩放和拖动
         zoom: 1, // 🌟 默认缩放比例（越小越缩）
+        center: [0, 0],
         scaleLimit: {
           min: 0.3, // 🌟 最小缩放
           max: 2.5, // 🌟 最大缩放
@@ -621,6 +681,36 @@ const initGraphChart = (myChart) => {
     }
   });
 };
+
+const dataFlowGraph = []
+const setRootGraph = (data_flow_graph)=>{
+  data_flow_graph.forEach((flow) => {
+    const fromId = flow.from;
+    const toId = flow.to;
+    if (fromId && toId) {
+      const edgeData = {
+        source: fromId+"_1",
+        target: toId+"_1",
+        type: "rootLink",
+        content: flow,
+        label: {
+          show: true,
+          formatter: flow.data_type || flow.label || '',
+          color: "#000"
+        },
+        lineStyle: {
+          color: "#000",
+          width: 1,
+        },
+        symbol: ['none', 'arrow'], // 线尾显示箭头
+        symbolSize: 10, // 箭头大小
+      }
+      dataFlowGraph.push(edgeData)
+    }
+  })
+  console.log(dataFlowGraph)
+
+}
 </script>
 
 <style scoped lang="scss">
@@ -642,6 +732,16 @@ const initGraphChart = (myChart) => {
   width: 100%;
   height: 100%;
 }
+// #wrapper {
+//   width: 200%;
+//   height: 200%;
+//   transform-origin: top left;
+//   position: absolute;
+//   left: 50%;
+//   top: 50%;
+//   /* ✅ 向左上反向平移缩放后图像一半的尺寸 */
+//   transform: translate(-25%, -25%) scale(0.5);
+// }
 
 #echart {
   width: 100%;
