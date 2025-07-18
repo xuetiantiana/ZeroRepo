@@ -3,6 +3,7 @@
   <div class="">
     <div class="header">
       <h3>ECharts Graph 图表 (无交叉扇形布局)</h3>
+      <span style="font-size: 12px;">Workflow</span>
 
       <div id="viewport">
         <div id="wrapper">
@@ -238,16 +239,33 @@ const ringColors = [
   "#568651", // 橄榄绿
   "#B89C80", // 黄色
 ];
+
+const ringColors2 = [
+  "#686759", // root/中心，最深
+  "#cfb9b4", // 红色
+  "#ebc59a", // 橙色
+  "#a4cadf", // 绿色
+  "#cdefca", // 橄榄绿
+  "#B89C80", // 黄色
+];
+// const ringColors2 = [
+//   "#686759", // root/中心，最深
+//   "#b04b354d", // 红色
+//   "#e37c055e", // 橙色
+//   "#5f9dbf63", // 绿色
+//   "#56865169", // 橄榄绿
+//   "#B89C80", // 黄色
+// ];
 const getSymbolSize = (level) => {
   let size;
   if (level == 0) {
     size = 5;
   } else if (level == 1) {
-    size = 50;
+    size = 62;
   } else if (level <= 4) {
-    size = 30;
+    size = 62;
   } else {
-    size = 3;
+    size = 10;
   }
   return size;
 };
@@ -255,14 +273,14 @@ const getSymbolSize = (level) => {
 const getItemStyle = (level) => {
   if (level <= 1) {
     return {
-      color: ringColors[level % ringColors.length],
-      borderColor: ringColors[level % ringColors.length],
+      color: ringColors2[level % ringColors2.length],
+      borderColor: ringColors2[level % ringColors2.length],
       borderWidth: 0.5,
     };
   } else {
     return {
-      color: ringColors[level % ringColors.length],
-      borderColor: ringColors[level % ringColors.length],
+      color: ringColors2[level % ringColors2.length],
+      borderColor: ringColors2[level % ringColors2.length],
       borderWidth: 0.5,
     };
   }
@@ -271,18 +289,60 @@ const getItemStyle = (level) => {
 const getLineStyle = (level) => {
   return {
     color: ringColors[level % ringColors.length],
-    width: 0.5,
+    width: 1,
   };
 };
 
-const getLabelPosition = (level, angle = 0, labelText = "", radius = 0) => {
+const ttt = (x0,y0,x1,y1)=>{
+  const r = 30;
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const angleRad = Math.atan2(dy, dx);
+  const angleDeg = angleRad * (180 / Math.PI);
+  const offsetX = Math.cos(angleRad) * r;
+  const offsetY = Math.sin(angleRad) * r;
+  return{
+    dx:-offsetX,
+    dy:-offsetY,
+    angleDeg: angleDeg,
+  }
+}
+
+const getExtendedPoint = (x1, y1, x2, y2, r) => {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const length = Math.sqrt(dx * dx + dy * dy);
+
+  // 单位方向向量
+  const ux = dx / length;
+  const uy = dy / length;
+
+  // 延长后的新坐标
+  const x3 = x2 + ux * r;
+  const y3 = y2 + uy * r;
+
+  // dx, dy 是从 x2 到 x3 的偏移
+  const offsetDx = x3 - x2;
+  const offsetDy = y3 - y2;
+
+  return {
+    x: x3,
+    y: y3,
+    dx: offsetDx,
+    dy: offsetDy
+  };
+}
+
+const getLabelPosition = (level, angle = 0, labelText = "", radius = 0,sssss) => {
   if (level >= 5) {
     // 让文本始终朝外，旋转角度与节点到圆心的方向一致
     let deg = angle * 180 / Math.PI;
-    console.log("!!!!",angle,deg)
+    console.log("!!!!","angle",angle,"deg",deg,"x和y坐标",sssss);
+    const ddddd = ttt(0,0,sssss?.x,sssss?.y);
+    console.log("!!!!",ddddd);
     // if (deg > 90 && deg < 270) {
     //   deg = deg + 180;
-    // }
+    // }            },
     // 估算label长度（每字符约7px，最小30px）
     const minOffset = 30;
     const charWidth = 7;
@@ -294,15 +354,32 @@ const getLabelPosition = (level, angle = 0, labelText = "", radius = 0) => {
     // 关键：label的圆环半径 = 节点半径 + 节点大小/2 + padding
     const labelCircleRadius = radius + nodeSize / 2 + padding;
     const offsetR = (labelCircleRadius - radius) + labelLen / 2;   
+    console.log(angle)
+
+    
+    const off_r = 100;
+
+    let offite_xy = getExtendedPoint(0,0,sssss?.x,sssss?.y,off_r);
+    console.log(offite_xy)
+      
+      let _rotate = (deg > 90 && deg < 270) ? 180-deg:-deg;
+      
+      let rad = (deg) * (Math.PI / 180)
+      let office = [
+        // label在圆环上的坐标减去节点坐标，得到偏移
+        off_r * Math.cos(rad),
+        off_r * Math.sin(rad)
+      ]
+      console.log("!!!!",office, "旋转后的角度",_rotate);
     return {
       show: true,
       position: 'inside', // 以节点为锚点
       fontSize: 12,
-      color: "transparent",
+      color: "#333",
       fontWeight: "normal",
       align: "center",
       verticalAlign: "middle",
-      rotate: (deg > 90 && deg < 270) ? 180-deg: 180-deg-180,
+      rotate: (deg > 90 && deg < 270) ? 180-deg:-deg,
       // color :(deg > 90 && deg < 270) ? 'red' : 'blue',
       // offset: [
 
@@ -311,25 +388,63 @@ const getLabelPosition = (level, angle = 0, labelText = "", radius = 0) => {
       //   offsetR * Math.sin(angle2)
 
       // ],
-      // rotate: 180-deg-360,
+      // rotate: ddddd.angleDeg,
+      
       // offset: [
       //   // label在圆环上的坐标减去节点坐标，得到偏移
-      //   labelCircleRadius * Math.cos(angle) - radius * Math.cos(angle),
-      //   labelCircleRadius * Math.sin(angle) - radius * Math.sin(angle)
+      //   ddddd.dx,
+      //   ddddd.dy
       // ],
+      //: (deg > 90 && deg < 270) ? 180-deg:-deg,
+      formatter: function (params) {
+            var name = params.name || "";
+            if (params && params.data && params.data.level >= 5) {
+              let ssss = (deg > 90 && deg < 270) ? `{main|${name}} {sub|${name}}` :  `{sub|${name}} {main|${name}}`;
+              console.log("￥￥￥!!!!",ssss);
+              return ssss;
+            }
+            // 处理长文本换行
+            var spaceParts = name.split(" ");
+            var lines = [];
+            for (var i = 0; i < spaceParts.length; i++) {
+              var part = spaceParts[i];
+              if (part.indexOf("-") !== -1) {
+                var dashParts = part.split("-");
+                for (var j = 0; j < dashParts.length; j++) {
+                  lines.push(dashParts[j]);
+                  if (j < dashParts.length - 1) lines.push("-");
+                }
+              } else {
+                lines.push(part);
+              }
+            }
+            return lines.join("\n");
+          },
+
+           rich: {
+    main: {
+      fontSize: 12,
+      color: '#000',
+    },
+    sub: {
+      fontSize: 12,
+      color: 'rgba(0, 0, 0, .1)', // ✅ 半透明黑色
+      height: -1
+    }
+  }
     };
   }
   let obj = {};
   if (level == 0) {
     obj = {
-      fontSize: 10,
+      fontSize: 12,
       color: "#333",
       fontWeight: "normal",
     };
   } else {
     obj = {
       position: "inside",
-      fontSize: 10,
+      fontSize: 12,
       color: "#333",
       verticalAlign: "middle",
       align: "center",
@@ -345,12 +460,11 @@ const getLabelPosition = (level, angle = 0, labelText = "", radius = 0) => {
 const getRadiusForLevel = (level) => {
   const radiusMap = {
     0: 0, // 根节点在中心
-    1: 80, // 第一层距离中心80px
-    2: 160, // 第二层距离中心160px
-    3: 240, // 第三层距离中心240px
-    4: 320, // 第四层距离中心320px
-    5: 380, // 第五层距离中心380px
-    6: 420, // 第六层及以上距离中心420px
+    1: 100, // 第一层距离中心80px
+    2: 200, // 第二层距离中心160px
+    3: 300, // 第三层距离中心240px
+    4: 400, // 第四层距离中心320px
+    5: 500, // 第五层距离中心380px
   };
 
   // 如果level超过6，使用level 6的距离，或者可以继续递增
@@ -427,7 +541,7 @@ const convertTreeToGraph = (treeData) => {
       sectorEnd: sectorEnd,
       fixed: true, // 固定位置，保持径向布局
       symbolSize: node.symbolSize || getSymbolSize(level),
-      label: getLabelPosition(level, currentAngle, node.name || "", currentRadius),
+      label: getLabelPosition(level, currentAngle, node.name || "", currentRadius,{x:x,y:y}),
       itemStyle: node.itemStyle || getItemStyle(level),
       category: level, // 用于分类着色
     };
@@ -482,6 +596,30 @@ const convertTreeToGraph = (treeData) => {
   console.log("Graph 节点布局完成，节点数量:", nodes.length,nodes, links);
   console.log(links,dataFlowGraph)
   let result = [...links, ...dataFlowGraph];
+  nodes.push({
+    x:500,
+    y:500,
+    name:"test1",
+    id:"test1",
+  })
+  nodes.push({
+    x:-500,
+    y:-500,
+    name:"test2",
+    id:"test2",
+  })
+  nodes.push({
+    x:-500,
+    y:500,
+    name:"test3",
+    id:"test3",
+  })
+  nodes.push({
+    x:500,
+    y:-500,
+    name:"test4",
+    id:"test4",
+  })
   console.log("!!!result",result)
   console.log(
     "扇形分配示例:",
@@ -561,11 +699,12 @@ const initGraphChart = (myChart) => {
   var option = {
     tooltip: {
       trigger: "item",
-      triggerOn: "mousemove",
+      triggerOn: "none",
       formatter: function (params) {
+        console.log(params)
         if (params.dataType === "node") {
           const nodeData = params.data;
-          let content = `<strong>节点名称:</strong> ${nodeData.name}<br/>`;
+          let content = `<strong>节点名称11:</strong> ${nodeData.name}<br/>`;
           if (nodeData.feature_path) {
             content += `<strong>路径:</strong> ${nodeData.feature_path}<br/>`;
           }
@@ -604,7 +743,7 @@ const initGraphChart = (myChart) => {
         zoom: 1, // 🌟 默认缩放比例（越小越缩）
         center: [0, 0],
         scaleLimit: {
-          min: 0.3, // 🌟 最小缩放
+          min: 1.2, // 🌟 最小缩放
           max: 2.5, // 🌟 最大缩放
         },
         data: graphData.nodes,
@@ -624,10 +763,11 @@ const initGraphChart = (myChart) => {
           fontSize: function (params) {
             return params && params.data && params.data.level >= 5 ? 10 : 12;
           },
+          // overflow: "truncate",
           formatter: function (params) {
             var name = params.name || "";
             if (params && params.data && params.data.level >= 5) {
-              return name;
+              return name+" - 111111"+name;
             }
             // 处理长文本换行
             var spaceParts = name.split(" ");
@@ -663,6 +803,9 @@ const initGraphChart = (myChart) => {
 
         animationDurationUpdate: 750,
         animationEasingUpdate: "quinticInOut",
+        // labelLayout: {
+        //   hideOverlap: true,
+        // },
       },
     ],
   };
@@ -680,7 +823,68 @@ const initGraphChart = (myChart) => {
       });
     }
   });
-};
+
+  
+    myChart.on('mousemove', function (params) {
+      // console.log("mousemove",params)
+      const nodes = myChart.getOption().series[0].data;
+       const offsetX = params.event.offsetX;
+  const offsetY = params.event.offsetY;
+      // 只适用于 graph + layout: 'none'
+      const [logicX, logicY] = myChart.convertFromPixel({ seriesIndex: 0 }, [offsetX, offsetY]);
+      let matchedIndex = null;
+
+      for (let i = 0; i < nodes.length; i++) {
+        const node = nodes[i];
+        
+        // 只匹配名字相同的节点
+        if (node.id === params.data.id) {
+          matchedIndex = i;
+        }
+      }
+      console.log('鼠标对应的 graph 坐标：', logicX, logicY,params.data.id,matchedIndex,nodes.length);
+      if (matchedIndex == null){
+        return
+      }
+      myChart.getOption().series[0].emphasis.disabled = true;
+      if (params.dataType === 'node' && params.data.level >= 5) {
+         myChart.getOption().series[0].emphasis.disabled = true; // 禁用所有 emphasis 效果
+
+          let found = false;
+          console.log((logicX) ,(params.data.x) , (logicY) , (params.data.y))
+          if(Math.sqrt(logicX) <Math.sqrt(params.data.x) || Math.sqrt(logicY) < Math.sqrt(params.data.y)){
+            console.log("隐藏")
+            myChart.dispatchAction({ type: 'hideTip' });
+
+          }else{
+            console.log("显示")
+            myChart.dispatchAction({
+              type: 'showTip',
+              seriesIndex: 0,
+              dataIndex: matchedIndex
+            });
+          }
+
+
+        // console.log('鼠标在节点上，主标题：', mainTitle);
+        //   if(logicX >Math.sqrt(params.data.x) && logicY > params.data.y){
+        //     console.log('鼠标在节点上，副标题：', subTitle);
+        //   }
+        // 无法判断是主标题区域还是副标题区域
+      }
+      else{
+        myChart.dispatchAction({
+        type: 'showTip',
+        seriesIndex: 0,
+        dataIndex: matchedIndex
+      });
+      }
+    });
+    myChart.getZr().on('mouseout', function () {
+  myChart.dispatchAction({ type: 'hideTip' });
+});
+  };
+
 
 const dataFlowGraph = []
 const setRootGraph = (data_flow_graph)=>{
