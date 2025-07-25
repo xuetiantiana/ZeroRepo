@@ -1,23 +1,40 @@
 <!-- filepath: e:\microsoft_work\ZeroRepo_dev\ZeroRepo\src\components\NetworkVisualization.vue -->
 <template>
   <div class="">
-    <div class="header">
-      <h3>ECharts Graph 图表 (无交叉扇形布局)</h3>
-      <!-- <span style="font-size: 10px;font-family: Arial, Helvetica, sans-serif;">normalize to mean 0 and std 1</span> -->
-
-      <div id="viewport">
-        <div id="wrapper">
+    <div style="height: 100vh;">
+      <div id="viewport" style="display: flex;">
+        <selected-nodes-panel
+        style="width: 20%; min-width: 300px;max-width: 600px;"
+          :selectedNodeList="selectedNodeList"
+          :maxSelectedNodes="maxSelectedNodes"
+          :currNode="currNode"
+          @removeSelectedNode="removeSelectedNode"
+          @updateMaxNodes="updateMaxNodes"
+        ></selected-nodes-panel>
+        <div id="wrapper" style="flex: 1; overflow: hidden;height: 100%;">
           <div id="echart" style="width: 100%; height: 100%"></div>
+          <!-- 独立的加号/减号按钮 -->
+          <div
+            id="plusButton"
+            class="plus-button"
+            style="display: none;"
+            @click="handlePlusClick"
+          >
+            +
+          </div>
         </div>
+
+        
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { onMounted, onUnmounted } from "vue";
+import { ref, onMounted, onUnmounted, watch } from "vue";
 
 import { hancelData, getMaxDepth } from "@/util/util";
+import SelectedNodesPanel from "@/components/SelectedNodesPanel.vue";
 
 // 正确引入 ECharts
 import * as echarts from "echarts";
@@ -26,14 +43,204 @@ let treeRoot = null; // 保存完整树结构
 let graphData = { nodes: [], links: [] }; // Graph 数据结构
 let scaleNum = 1;
 let myChart = null;
+let isDraggingOrZooming = false; // 标记是否正在拖拽或缩放
+let currentHoverNode = null; // 当前悬停的节点
+let plusButton = null; // 加号按钮DOM元素
+const selectedNodeList = ref([]);
+const maxSelectedNodes = ref(10); // 最多可选择的节点数量
+const currNode = ref();
+
+// 处理加号/减号按钮点击
+const handlePlusClick = () => {
+  if(currentHoverNode && currentHoverNode.level <= 1){
+    return;
+  }
+  if (currentHoverNode) {
+    const featurePath = currentHoverNode.feature_path;
+
+    // 检查节点是否已经在选择列表中
+    const isSelected = selectedNodeList.value.some(node => node.feature_path === featurePath);
+
+    if (isSelected) {
+      // 如果已选择，从列表中移除
+      console.log("点击减号，移除节点:", currentHoverNode);
+      selectedNodeList.value = selectedNodeList.value.filter(node => node.feature_path !== featurePath);
+    } else {
+      // 检查是否超过最大选择数量
+      if (selectedNodeList.value.length >= maxSelectedNodes.value) {
+        alert(`最多只能选择 ${maxSelectedNodes.value} 个节点！`);
+        hidePlusButton();
+        return;
+      }
+
+      // 如果未选择且未超过限制，添加到列表中
+      console.log("点击加号，添加节点:", currentHoverNode);
+      selectedNodeList.value.unshift(currentHoverNode);
+    }
+
+    console.log("当前选择的节点列表:", selectedNodeList.value);
+
+    // 点击后隐藏按钮
+    hidePlusButton();
+  }
+};
+
+// 显示加号/减号按钮
+const showPlusButton = (nodeData) => {
+  if (!plusButton || isDraggingOrZooming) return;
+
+  try {
+    // 检查节点是否已经在选择列表中
+    const isSelected = selectedNodeList.value.some(node => node.feature_path === nodeData.feature_path);
+
+    // 将节点的逻辑坐标转换为像素坐标
+    const pixelPoint = myChart.convertToPixel('series', [nodeData.x, nodeData.y]);
+    const nodeSize = nodeData.symbolSize || 30;
+
+    // 计算按钮位置（节点右上角）
+    const offsetX = nodeSize / 2 + 10;
+    const offsetY = -nodeSize / 2 - 10;
+
+    plusButton.style.left = (pixelPoint[0] + offsetX) + 'px';
+    plusButton.style.top = (pixelPoint[1] + offsetY) + 'px';
+    plusButton.style.display = 'flex';
+
+    // 根据选择状态显示不同的图标和样式
+    if (isSelected) {
+      plusButton.textContent = '−'; // 减号
+      plusButton.style.backgroundColor = '#f56c6c'; // 红色背景
+      plusButton.title = '点击取消选择';
+    } else {
+      // 检查是否已达到最大选择数量
+      if (selectedNodeList.value.length >= maxSelectedNodes.value) {
+        plusButton.textContent = '+'; // 仍然显示加号
+        plusButton.style.backgroundColor = '#909399'; // 灰色背景表示不可选择
+        plusButton.title = `已达到最大选择数量 (${selectedNodeList.value.length}/${maxSelectedNodes.value})`;
+      } else {
+        plusButton.textContent = '+'; // 加号
+        plusButton.style.backgroundColor = '#409eff'; // 蓝色背景
+        plusButton.title = `点击选择节点 (${selectedNodeList.value.length}/${maxSelectedNodes.value})`;
+      }
+    }
+
+    currentHoverNode = nodeData;
+  } catch (error) {
+    console.error('显示按钮失败:', error);
+  }
+};
+
+// 隐藏加号按钮
+const hidePlusButton = () => {
+  clearTimeout(hideTimeout); // 清除任何待执行的隐藏操作
+  if (plusButton) {
+    plusButton.style.display = 'none';
+  }
+  currentHoverNode = null;
+  lastHoverNodePath = null; // 重置路径
+};
+
+// 检查鼠标是否在加号按钮上
+const isMouseOverPlusButton = () => {
+  if (!plusButton) return false;
+  return plusButton.matches(':hover');
+};
+
+// 检查节点是否已选择
+const isNodeSelected = (nodeData) => {
+  return selectedNodeList.value.some(node => node.feature_path === nodeData.feature_path);
+};
+
+// 从选择列表中移除节点
+const removeSelectedNode = (featurePath) => {
+  selectedNodeList.value = selectedNodeList.value.filter(node => node.feature_path !== featurePath);
+  console.log("移除节点:", featurePath);
+  console.log("当前选择的节点列表:", selectedNodeList.value);
+};
+
+// 更新最大选择节点数量（从组件传来的事件）
+const updateMaxNodes = (newMaxNodes) => {
+  maxSelectedNodes.value = newMaxNodes;
+  console.log("从组件更新最大选择节点数量为:", newMaxNodes);
+};
+
+// 设置最大选择节点数量
+const setMaxSelectedNodes = (count) => {
+  if (count > 0) {
+    maxSelectedNodes.value = count;
+    console.log("设置最大选择节点数量为:", count);
+
+    // 如果当前选择的节点数量超过新的限制，截断列表
+    if (selectedNodeList.value.length > count) {
+      const removedNodes = selectedNodeList.value.slice(count);
+      selectedNodeList.value = selectedNodeList.value.slice(0, count);
+      console.log("由于限制变更，移除了以下节点:", removedNodes);
+    }
+  }
+};
+
+// 获取当前选择状态信息
+const getSelectionInfo = () => {
+  return {
+    selected: selectedNodeList.value.length,
+    max: maxSelectedNodes.value,
+    remaining: maxSelectedNodes.value - selectedNodeList.value.length,
+    isFull: selectedNodeList.value.length >= maxSelectedNodes.value
+  };
+};
+
+// 为加号按钮添加鼠标事件
+const setupPlusButtonEvents = () => {
+  if (!plusButton) return;
+
+  // 鼠标进入加号按钮
+  plusButton.addEventListener('mouseenter', () => {
+    console.log('鼠标进入加号按钮');
+    // 鼠标在加号上时，保持显示状态
+    clearTimeout(hideTimeout);
+  });
+
+  // 鼠标离开加号按钮
+  plusButton.addEventListener('mouseleave', () => {
+    console.log('鼠标离开加号按钮');
+    // 立即隐藏加号
+    hidePlusButton();
+  });
+
+  // 加号按钮点击事件（作为备用，主要还是使用Vue的@click）
+  plusButton.addEventListener('click', (e) => {
+    e.stopPropagation(); // 阻止事件冒泡
+    handlePlusClick();
+  });
+};
+
+// 用于管理隐藏延迟的变量
+let hideTimeout = null;
+let lastHoverNodePath = null; // 记录最后hover的节点路径
+
+// 监听最大选择数量的变化
+watch(maxSelectedNodes, (newValue, oldValue) => {
+  console.log(`最大选择数量从 ${oldValue} 变更为 ${newValue}`);
+
+  // 如果当前选择的节点数量超过新的限制，截断列表
+  if (selectedNodeList.value.length > newValue) {
+    const removedNodes = selectedNodeList.value.slice(newValue);
+    selectedNodeList.value = selectedNodeList.value.slice(0, newValue);
+    console.log("由于限制变更，移除了以下节点:", removedNodes);
+    alert(`由于限制变更，已移除 ${removedNodes.length} 个节点`);
+  }
+});
 
 onMounted(() => {
   const width = window.innerWidth;
   const height = window.innerHeight;
   const minScreenSize = Math.min(width, height);
 
-  scaleNum = Math.max(2000 / minScreenSize, 1);
-  console.log("屏幕尺寸：", width, height, 2000 / minScreenSize, scaleNum);
+  scaleNum = Math.max(2600 / minScreenSize, 1);
+
+  // 获取加号按钮DOM元素并设置事件
+  plusButton = document.getElementById('plusButton');
+  setupPlusButtonEvents();
+  console.log("屏幕尺寸：", width, height, 2600 / minScreenSize, scaleNum);
 
   // 获取 DOM 元素
   const chartDom = document.getElementById("echart");
@@ -157,10 +364,14 @@ const getSymbolSize = (level) => {
     size = 5;
   } else if (level == 1) {
     size = 100 / scaleNum;
-  } else if (level <= 4) {
-    size = 42 / scaleNum;
-  } else {
-    size = 15 / scaleNum;
+  } else if (level == 2) {
+    size = 80 / scaleNum;
+  }  else if (level == 3) {
+    size = 48 / scaleNum;
+  } else if (level == 4) {
+    size = 38 / scaleNum;
+  }else {
+    size = 30 / scaleNum;
   }
   return size;
 };
@@ -325,10 +536,10 @@ const getExtendedPoint = (x0, y0, x1, y1, r = 30, labelText) => {
 const getRadiusForLevel = (level) => {
   const radiusMap = {
     0: 0, // 根节点在中心
-    1: 140, // 第一层距离中心80px
-    2: 240, // 第二层距离中心160px
-    3: 340, // 第三层距离中心240px
-    4: 440, // 第四层距离中心320px
+    1: 130, // 第一层距离中心80px
+    2: 220, // 第二层距离中心160px
+    3: 310, // 第三层距离中心240px
+    4: 400, // 第四层距离中心320px
     5: 500, // 第五层距离中心380px
   };
 
@@ -728,19 +939,117 @@ const initGraphChart = (myChart) => {
 
   myChart.setOption(option);
 
-  // 添加节点点击事件
-  myChart.on("click", function (params) {
+  // 初始化时显示默认加号（在根节点旁边）
+  setTimeout(() => {
+    if (graphData.nodes && graphData.nodes.length > 0) {
+      const rootNode = graphData.nodes[0]; // 假设第一个节点是根节点
+      showPlusButton(rootNode);
+    }
+  }, 100); // 延迟一点确保图表完全渲染
+
+
+
+  // 添加鼠标悬停事件 - 显示加号
+  myChart.on("mouseover", function (params) {
+    // 如果正在拖拽或缩放，不处理mouseover事件
+    if (isDraggingOrZooming) {
+      return;
+    }
+
+    if (params.componentType === 'series' && params.dataType === 'node' && params.data.level > 1) {
+      console.log('鼠标进入了节点（或节点label）:', params.name);
+
+      const currentNodePath = params.data.feature_path;
+
+      // 清除任何待执行的隐藏操作
+      clearTimeout(hideTimeout);
+
+      // 如果是同一个节点（包括从节点到标签的移动），不需要重新显示加号
+      if (lastHoverNodePath === currentNodePath) {
+        return;
+      }
+
+      // 更新最后hover的节点路径
+      lastHoverNodePath = currentNodePath;
+
+      showPlusButton(params.data);
+    }
+  });
+
+  // 添加鼠标离开事件 - 延迟隐藏加号
+  myChart.on("mouseout", function (params) {
+    if (params.componentType === 'series' && params.dataType === 'node' && params.data.level > 1) {
+      console.log('鼠标移出了节点:', params.name);
+
+      const currentNodePath = params.data.feature_path;
+
+      // 只有当前hover的节点才处理mouseout事件
+      if (lastHoverNodePath !== currentNodePath) {
+        return;
+      }
+
+      // 清除之前的超时
+      clearTimeout(hideTimeout);
+      // 延迟隐藏，给用户时间移动到加号上
+      hideTimeout = setTimeout(() => {
+        // 再次检查是否还在同一个节点上（防止快速移动导致的问题）
+        if (lastHoverNodePath === currentNodePath && !isMouseOverPlusButton()) {
+          hidePlusButton();
+          lastHoverNodePath = null; // 重置路径
+        }
+      }, 200); // 适中的延迟时间
+    }
+  });
+
+  // 监听拖拽开始事件 - 隐藏加号
+  myChart.on('georoam', function() {
+    // 设置拖拽/缩放状态
+    isDraggingOrZooming = true;
+
+    // 拖拽或缩放时隐藏加号
+    console.log("拖拽/缩放开始", currentHoverNode)
+    hidePlusButton();
+
+    // 延迟重置状态，确保拖拽/缩放操作完成
+    setTimeout(() => {
+      isDraggingOrZooming = false;
+      console.log("拖拽/缩放结束");
+    }, 300); // 300ms延迟，可以根据需要调整
+  });
+
+  // 监听鼠标按下事件 - 准备拖拽时隐藏加号
+  myChart.on('mousedown', function() {
+    // 设置拖拽状态（预备状态）
+    isDraggingOrZooming = true;
+
+    // 鼠标按下时隐藏加号，准备可能的拖拽操作
+    hidePlusButton();
+  });
+
+  // 监听鼠标抬起事件 - 重置拖拽状态
+  myChart.on('mouseup', function() {
+    // 延迟重置状态，确保操作完成
+    setTimeout(() => {
+      isDraggingOrZooming = false;
+      console.log("鼠标操作结束");
+    }, 100);
+  });
+
+  // 节点点击事件
+  myChart.on('click', function(params) {
+    // 节点点击事件
     if (params.dataType === "node") {
-      console.log("params.data",params.data)
+      console.log("params.data", params.data);
       const featurePath = params.data.feature_path;
-      const wasCollapsed = toggleChildrenVisibility(featurePath); // 展开/收缩
-      graphData = convertTreeToGraph(treeRoot); // 重新生成可见节点
+      toggleChildrenVisibility(featurePath);
+      graphData = convertTreeToGraph(treeRoot);
       myChart.setOption({
         series: [{ data: graphData.nodes, links: graphData.links }],
       });
-
-      // 只有在展开时自动居中视图
       centerViewToNode(params.data);
+      if(params.data.level > 1){
+        currNode.value = params.data;
+      }
     }
   });
 
@@ -883,9 +1192,58 @@ function centerViewToNode(node) {
   }
 }
 
+/* 控制面板样式 */
+.control-panel {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 10px 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  margin: 0 20px 10px 20px;
+  border: 1px solid #e9ecef;
+}
+
+.control-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.control-item label {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+}
+
+.max-nodes-input {
+  width: 60px;
+  padding: 4px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.max-nodes-input:focus {
+  outline: none;
+  border-color: #409eff;
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
+}
+
+.selection-status {
+  font-size: 14px;
+  color: #666;
+}
+
+.status-full {
+  color: #f56c6c;
+  font-weight: 500;
+}
+
 #viewport {
   width: 100vw;
-  height: calc(100vh - 120px);
+  height: 100vh;
   overflow: hidden;
   position: relative;
 }
@@ -909,4 +1267,56 @@ function centerViewToNode(node) {
   width: 100%;
   height: 100%;
 }
+
+/* 加号按钮样式 */
+.plus-button {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background-color: #409eff;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 5;
+  font-weight: bold;
+  cursor: pointer;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+  user-select: none;
+  /* 增加点击区域 */
+  padding: 4px;
+  margin: -4px;
+}
+
+.plus-button:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* 加号按钮hover效果 */
+.plus-button:hover[style*="background-color: rgb(64, 158, 255)"] {
+  background-color: #66b1ff !important;
+}
+
+/* 减号按钮hover效果 */
+.plus-button:hover[style*="background-color: rgb(245, 108, 108)"] {
+  background-color: #f78989 !important;
+}
+
+/* 禁用状态按钮hover效果 */
+.plus-button:hover[style*="background-color: rgb(144, 147, 153)"] {
+  background-color: #a6a9ad !important;
+}
+
+.plus-button:active {
+  transform: scale(1.05);
+}
+
+#wrapper {
+  position: relative;
+}
+
+
 </style>

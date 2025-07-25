@@ -27,7 +27,7 @@ const isDocstringExpanded = (key: string) => {
 };
 </script>
 <template>
-  <div class="modal-body" v-if="currNode && currNode.metaData">
+  <div class="body" v-if="currNode && currNode.metaData">
     <div class="info-item">
       <span class="info-label">node:</span>
       <span class="info-value">{{ currNode.metaData.node }}</span>
@@ -113,105 +113,51 @@ const isDocstringExpanded = (key: string) => {
 </template>
 
 <style scoped  lang="scss">
-/* ==================== 弹窗样式 ==================== */
-.node-model-item {
-  width: 100%;
-  background: white;
-  border: 2px solid #ccc;
-  border-radius: 8px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-  min-height: 200px;
-
-  transition: opacity 0.3s ease-in-out;
-  margin-top: 1em;
-  &:nth-child(1) {
-    margin-top: 0;
-  }
-
+.body {
   .show {
     z-index: 1000;
     opacity: 1;
     pointer-events: auto;
   }
 
-  .modal-header {
-    background: #f5f5f5;
-    padding: 15px;
-    border-bottom: 1px solid #ddd;
-    border-radius: 6px 6px 0 0;
-    position: relative;
+  .info-item {
+    margin-bottom: 8px;
+    overflow-wrap: break-word; /* 新标准 */
+    word-wrap: break-word; /* 兼容旧浏览器 */
+
+    .info-label {
+      font-weight: bold;
+      color: #555;
+    }
+
+    .info-value {
+      margin-left: 10px;
+      color: #333;
+    }
   }
 
-  .modal-title {
-    margin: 0;
-    font-weight: bold;
-    color: #333;
-  }
+  .info-docstring {
+    .docstring-content {
+      cursor: pointer;
+      display: -webkit-box;
+      -webkit-line-clamp: 1;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: all 0.3s ease;
 
-  .close-btn {
-    position: absolute;
-    right: 10px;
-    top: 10px;
-    background: none;
-    border: none;
-    font-size: 20px;
-    cursor: pointer;
-    color: #666;
-    width: 30px;
-    height: 30px;
-    border-radius: 15px;
-  }
+      // &:hover {
+      //   color: #007bff;
+      // }
+    }
 
-  .close-btn:hover {
-    background: #e0e0e0;
-    color: #000;
-  }
-
-  .modal-body {
-    padding: 15px;
-    max-height: 200px;
-    overflow-y: auto;
-  }
-}
-
-/* ==================== Modal内容样式 ==================== */
-.info-item {
-  margin-bottom: 8px;
-  overflow-wrap: break-word; /* 新标准 */
-  word-wrap: break-word; /* 兼容旧浏览器 */
-
-  .info-label {
-    font-weight: bold;
-    color: #555;
-  }
-
-  .info-value {
-    margin-left: 10px;
-    color: #333;
-  }
-}
-
-.info-docstring {
-  .docstring-content {
-    cursor: pointer;
-    display: -webkit-box;
-    -webkit-line-clamp: 1;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    transition: all 0.3s ease;
-
-    // &:hover {
-    //   color: #007bff;
-    // }
-  }
-
-  &.expanded .docstring-content {
-    display: block;
-    -webkit-line-clamp: unset;
-    overflow: visible;
-    &:hover {
-      color: #000;
+    &.expanded .docstring-content {
+      display: block;
+      -webkit-line-clamp: unset;
+      overflow: visible;
+      &:hover {
+        color: #000;
+      }
     }
   }
 }
