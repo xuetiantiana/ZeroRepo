@@ -3,6 +3,7 @@
   <div class="">
     <div class="header">
       <h3>ECharts Graph 图表 (无交叉扇形布局)</h3>
+      <!-- <span style="font-size: 10px;font-family: Arial, Helvetica, sans-serif;">normalize to mean 0 and std 1</span> -->
 
       <div id="viewport">
         <div id="wrapper">
@@ -24,38 +25,49 @@ import * as echarts from "echarts";
 let treeRoot = null; // 保存完整树结构
 let graphData = { nodes: [], links: [] }; // Graph 数据结构
 let scaleNum = 1;
+let myChart = null;
 
 onMounted(() => {
   const width = window.innerWidth;
   const height = window.innerHeight;
   const minScreenSize = Math.min(width, height);
 
-  scaleNum = Math.max(1666 / minScreenSize, 1);
-  console.log("屏幕尺寸：", width, height, 1666 / minScreenSize, scaleNum);
+  scaleNum = Math.max(2000 / minScreenSize, 1);
+  console.log("屏幕尺寸：", width, height, 2000 / minScreenSize, scaleNum);
 
   // 获取 DOM 元素
   const chartDom = document.getElementById("echart");
   if (!chartDom) return;
-  const myChart = echarts.init(chartDom);
+  myChart = echarts.init(chartDom);
 
   // myChart.showLoading();
-  fetch("./data/webui.json")
-    .then((res) => res.json())
-    .then((data) => {
-      // 设置根节点之间的连线
-      setDataFlowGraph(data.data_flow_graph);
+  Promise.all([
+    fetch("./data/webui.json").then((res) => res.json()),
+    fetch("./data/map.json").then((res) => res.json()),
+  ])
+    .then(([webuiData, mapData]) => {
+      // 两个数据都拿到了
+      console.log("webui:", webuiData);
+      console.log("map:", mapData);
 
-      const convertedData = hancelData(data);
+      // 设置根节点之间的连线
+      setDataFlowGraph(webuiData.data_flow_graph);
+
+      const convertedData = hancelData(webuiData,mapData);
       treeRoot = convertedData; // 保存完整树结构
 
       // 转换为 Graph 数据格式
 
-      updateVisibleNodes(1); // 只显示根和第二层
+      updateVisibleNodes(5); // 只显示根和第二层
       graphData = convertTreeToGraph(treeRoot); // 只显示可见节点和线
 
       initGraphChart(myChart);
-    });
 
+      // 在这里使用 webuiData 和 chartData
+    })
+    .catch((error) => {
+      console.error("请求失败:", error);
+    });
   // 可选：组件卸载时销毁实例
   onUnmounted(() => {
     myChart.dispose();
@@ -77,14 +89,17 @@ const setDataFlowGraph = (data_flow_graph) => {
           show: true,
           formatter: flow.data_type || flow.label || "",
           color: "#000",
-          fontSize: 10,
+          fontSize: 9,
+          position: "middle",
         },
         lineStyle: {
           color: "#000",
           width: 1,
+          type: "dashed",
+          opacity: 1,
         },
-        symbol: ["none", "arrow"], // 线尾显示箭头
-        symbolSize: 10, // 箭头大小
+        symbol: ["circle", "arrow"], // 线尾显示箭头
+        symbolSize: [4, 8], // 箭头大小
       };
       dataFlowGraph.push(edgeData);
     }
@@ -122,11 +137,11 @@ const ringColors = [
 
 const ringColors2 = [
   "#686759", // root/中心，最深
-  "#cfb9b4", // 红色
-  "#ebc59a", // 橙色
-  "#a4cadf", // 绿色
-  "#cdefca", // 橄榄绿
-  "#B89C80", // 黄色
+  "#4EA3F9", // 红色
+  "#528FB7", // 橙色
+  "#52E0FC", // 绿色
+  "#40C2F2", // 橄榄绿
+  "#BAD7F3", // 黄色
 ];
 // const ringColors2 = [
 //   "#686759", // root/中心，最深
@@ -141,11 +156,11 @@ const getSymbolSize = (level) => {
   if (level == 0) {
     size = 5;
   } else if (level == 1) {
-    size = 82 / scaleNum;
+    size = 100 / scaleNum;
   } else if (level <= 4) {
     size = 42 / scaleNum;
   } else {
-    size = 5 / scaleNum;
+    size = 15 / scaleNum;
   }
   return size;
 };
@@ -156,12 +171,14 @@ const getItemStyle = (level) => {
       color: ringColors2[level % ringColors2.length],
       borderColor: ringColors2[level % ringColors2.length],
       borderWidth: 0.5,
+      opacity: 1,
     };
   } else {
     return {
       color: ringColors2[level % ringColors2.length],
       borderColor: ringColors2[level % ringColors2.length],
       borderWidth: 0.5,
+      // opacity: 1,
     };
   }
 };
@@ -184,18 +201,20 @@ const getLabelStyle = (
   if (level >= 5) {
     // 让文本始终朝外，旋转角度与节点到圆心的方向一致
     let deg = (angle * 180) / Math.PI;
-    console.log("!!!!", "angle", angle, "deg", deg, "x和y坐标", pointPosition);
+    // console.log("!!!!", "angle", angle, "deg", deg, "x和y坐标", pointPosition);
     const offite_xy = getExtendedPoint(
       0,
       0,
-      pointPosition?.x,
-      pointPosition?.y,
+      pointPosition?.x + 0,
+      pointPosition?.y + 0,
       100,
       labelText
     );
+    const r = getSymbolSize(5);
+    const dd = deg > 90 && deg < 270 ? 180 - deg : -deg;
     return {
       show: true,
-      position: [offite_xy.dx, offite_xy.dy], // 以节点为锚点
+      position: [offite_xy.dx + r, offite_xy.dy + r], // 以节点为锚点
       fontSize: 12,
       color: "#333",
       fontWeight: "normal",
@@ -205,8 +224,8 @@ const getLabelStyle = (
       // color :(deg > 90 && deg < 270) ? 'red' : 'blue',
       // offset: [
       //   // label在圆环上的坐标减去节点坐标，得到偏移
-      //   ddddd.dx,
-      //   ddddd.dy
+      //   10 / scaleNum/2,
+      //   10 / scaleNum/2,
       // ],
       formatter: function (params) {
         var name = params.name || "";
@@ -270,13 +289,25 @@ const getLabelStyle = (
   return obj;
 };
 
+function measureTextWidth(text, fontSize = 10, fontFamily = "Arial") {
+  const canvas =
+    measureTextWidth._canvas ||
+    (measureTextWidth._canvas = document.createElement("canvas"));
+  const context = canvas.getContext("2d");
+  context.font = `${fontSize}px ${fontFamily}`;
+  const width = context.measureText(text).width;
+  // console.log("width", text, width);
+  return width;
+}
+
 const getExtendedPoint = (x0, y0, x1, y1, r = 30, labelText) => {
   // 估算label长度（每字符约7px，最小30px）
   // const minOffset = 30;
-  const charWidth = 2.5;
+  const charWidth = 3;
   const labelLen = labelText.length * charWidth;
-  r = labelLen;
-  console.log("labelText", labelText.length, r);
+  // console.log("width2", labelLen);
+  r = measureTextWidth(labelText) / 2 + 12;
+  // console.log("labelText", labelText.length, r);
   const dx = x1 - x0;
   const dy = y1 - y0;
   const angleRad = Math.atan2(dy, dx);
@@ -294,9 +325,9 @@ const getExtendedPoint = (x0, y0, x1, y1, r = 30, labelText) => {
 const getRadiusForLevel = (level) => {
   const radiusMap = {
     0: 0, // 根节点在中心
-    1: 130, // 第一层距离中心80px
-    2: 200, // 第二层距离中心160px
-    3: 320, // 第三层距离中心240px
+    1: 140, // 第一层距离中心80px
+    2: 240, // 第二层距离中心160px
+    3: 340, // 第三层距离中心240px
     4: 440, // 第四层距离中心320px
     5: 500, // 第五层距离中心380px
   };
@@ -335,7 +366,7 @@ const convertTreeToGraph = (treeData) => {
       // 特点: 每层权重线性递减0.2，衰减平缓均匀
       // 权重分布: Level 0: 1.0 → Level 1: 0.8 → Level 2: 0.6 → Level 3: 0.4 → Level 4+: 0.2
       // 适用场景: 各层级权重差异不大，保持相对平衡的布局
-      return Math.max(0.2, 1.0 - level * 0.2);
+      // return Math.max(0.2, 1.0 - level * 0.2);
 
       // ==================== 策略2: 指数衰减（激进）- 当前使用 ====================
       // 公式: Math.max(0.1, Math.pow(0.7, level))
@@ -357,6 +388,23 @@ const convertTreeToGraph = (treeData) => {
       // 权重分布: Level 0-1: 1.0 → Level 2-3: 0.5 → Level 4+: 0.2
       // 适用场景: 明确区分层级重要性，同层级节点权重一致
       // return level <= 1 ? 1.0 : level <= 3 ? 0.5 : 0.2;
+
+      // Level 0: 1.0 → Level 1: 0.71 → Level 2: 0.58 → Level 3: 0.5 → Level 4: 0.45 → Level 5+: 0.3
+      let num = 1;
+      if (level <= 1) {
+        num = 1;
+      } else if (level == 1) {
+        num = 0.75;
+      } else if (level == 2) {
+        num = 0.5;
+      } else if (level == 3) {
+        num = 0.3;
+      } else if (level == 4) {
+        num = 0.25;
+      } else {
+        num = 0.08;
+      }
+      return num;
     }
 
     if (!node.children || node.children.length === 0) {
@@ -412,6 +460,7 @@ const convertTreeToGraph = (treeData) => {
       name: node.name || "Unknown",
       feature_path: node.feature_path || "",
       level: level,
+      metaData: node.metaData,
       x: x,
       y: y,
       angle: currentAngle,
@@ -419,6 +468,7 @@ const convertTreeToGraph = (treeData) => {
       sectorEnd: sectorEnd,
       fixed: true, // 固定位置，保持径向布局
       symbolSize: node.symbolSize || getSymbolSize(level),
+      // symbol: "rect",
       label: getLabelStyle(
         level,
         currentAngle,
@@ -430,11 +480,14 @@ const convertTreeToGraph = (treeData) => {
       category: level, // 用于分类着色
     };
 
-    nodes.push(graphNode);
+    if (level != 0) {
+      nodes.push(graphNode);
+    }
+
     nodeMap.set(node.name, nodeId);
 
     // 创建与父节点的连接
-    if (parentId) {
+    if (parentId && level >= 2) {
       links.push({
         source: parentId,
         target: nodeId,
@@ -485,11 +538,11 @@ const convertTreeToGraph = (treeData) => {
 
   if (getMaxDepth(filteredTree) <= 2) {
     dataFlowGraph.forEach((item) => {
-      item.label.color = "#000";
+      item.label.show = true;
     });
   } else {
     dataFlowGraph.forEach((item) => {
-      item.label.color = "transparent";
+      item.label.show = false;
     });
   }
   let linksResult = [...dataFlowGraph, ...links];
@@ -522,7 +575,15 @@ const toggleChildrenVisibility = (featurePath) => {
     return null;
   }
   const node = findNode(treeRoot, featurePath);
+  let wasCollapsed = false;
   if (node && node.children) {
+    // 判断是否有隐藏的子节点（即即将展开）
+    for (const child of node.children) {
+      if (child.visible === false) {
+        wasCollapsed = true;
+        break;
+      }
+    }
     node.children.forEach((child) => {
       child.visible = !child.visible;
       // 如果隐藏，则递归隐藏所有后代
@@ -535,6 +596,7 @@ const toggleChildrenVisibility = (featurePath) => {
       }
     });
   }
+  return wasCollapsed; // 返回是否是展开操作
 };
 
 // 新增：使用 Graph 图表的初始化函数
@@ -554,14 +616,13 @@ const initGraphChart = (myChart) => {
       triggerOn: "mousemove",
       extraCssText: "max-width: 400px; white-space: normal;",
       formatter: function (params) {
-        console.log(params);
+        // console.log(params);
         if (params.dataType === "node") {
           const nodeData = params.data;
-          let content = `<strong>节点名称11:</strong> ${nodeData.name}<br/>`;
+          let content = `<strong>Node: </strong> ${nodeData.name}<br/>`;
           if (nodeData.feature_path) {
-            content += `<strong>路径:</strong> ${nodeData.feature_path}<br/>`;
+            content += `<strong>Feature Path: </strong> ${nodeData.feature_path}<br/>`;
           }
-          content += `<strong>层级:</strong> ${nodeData.level}`;
           return content;
         }
         // 只显示 rootLink 类型的边的弹窗
@@ -570,11 +631,11 @@ const initGraphChart = (myChart) => {
           params.data &&
           params.data.type === "rootLink"
         ) {
-          let content = `<strong>数据流:</strong><br/>`;
-          content += `<strong>from:</strong> ${params.data.content.from}<br/>`;
-          content += `<strong>to:</strong> ${params.data.content.to}<br/>`;
+          let content = `<strong>Flow Graph:</strong><br/>`;
+          content += `<strong>From: </strong> ${params.data.content.from}<br/>`;
+          content += `<strong>To: </strong> ${params.data.content.to}<br/>`;
           if (params.data.label && params.data.label.formatter) {
-            content += `<strong>data_type:</strong> ${params.data.content.data_type}<br/>`;
+            content += `<strong>Data Type: </strong> ${params.data.content.data_type}<br/>`;
           }
           return content;
         }
@@ -594,7 +655,7 @@ const initGraphChart = (myChart) => {
         zoom: scaleNum, // 🌟 默认缩放比例（越小越缩）
         center: [0, 0],
         scaleLimit: {
-          min: 1, // 🌟 最小缩放
+          min: scaleNum * 0.7, // 🌟 最小缩放
           max: scaleNum * 5, // 🌟 最大缩放
         },
         data: graphData.nodes,
@@ -654,8 +715,13 @@ const initGraphChart = (myChart) => {
         animationDurationUpdate: 750,
         animationEasingUpdate: "quinticInOut",
         // labelLayout: {
-        //   hideOverlap: true,
+        //   hideOverlap: false,
         // },
+        // blur:{
+        //   itemStyle:{
+        //     opacity:.5
+        //   }
+        // }
       },
     ],
   };
@@ -665,12 +731,16 @@ const initGraphChart = (myChart) => {
   // 添加节点点击事件
   myChart.on("click", function (params) {
     if (params.dataType === "node") {
+      console.log("params.data",params.data)
       const featurePath = params.data.feature_path;
-      toggleChildrenVisibility(featurePath); // 展开/收缩
+      const wasCollapsed = toggleChildrenVisibility(featurePath); // 展开/收缩
       graphData = convertTreeToGraph(treeRoot); // 重新生成可见节点
       myChart.setOption({
         series: [{ data: graphData.nodes, links: graphData.links }],
       });
+
+      // 只有在展开时自动居中视图
+      centerViewToNode(params.data);
     }
   });
 
@@ -741,6 +811,68 @@ const initGraphChart = (myChart) => {
   //   myChart.dispatchAction({ type: "hideTip" });
   // });
 };
+
+// 新增：自动居中视图到点击节点
+function centerViewToNode(node) {
+  if (!myChart || !node) return;
+  // 获取当前节点的像素坐标
+  console.log("@@@", node);
+  const pixel = myChart.convertToPixel({ seriesIndex: 0 }, [node.x, node.y]);
+  const chartDom = myChart.getDom();
+  const chartWidth = chartDom.offsetWidth;
+  const chartHeight = chartDom.offsetHeight;
+
+  // 判断节点是否在边缘（距离边界小于阈值）
+  const zoom = myChart.getModel().getSeriesByIndex(0).option.zoom;
+  const edgeThreshold = 80 * zoom; // px
+  const [px, py] = pixel;
+  let needMove = false;
+  if (
+    px < edgeThreshold ||
+    px > chartWidth - edgeThreshold ||
+    py < edgeThreshold ||
+    py > chartHeight - edgeThreshold
+  ) {
+    needMove = true;
+  }
+
+  if (needMove) {
+    console.log("needMove");
+    // 计算需要偏移的中心
+    // 目标中心为节点的逻辑坐标
+    // myChart.setOption({
+    //   series: [{
+    //     center: [
+    //       node.x,
+    //       node.y,
+    //     ]
+    //   }]
+    // });
+
+    const { x, y } = node;
+    const distance = Math.sqrt(x * x + y * y);
+    if (distance === 0) return; // 原点不移动
+    // 计算目标点（圆心方向偏移100距离）
+    const targetDistance = Math.max(0, distance - 200 / zoom);
+    const ratio = targetDistance / distance;
+    const targetX = x * ratio;
+    const targetY = y * ratio;
+    // 设置画布中心为目标点，实现偏移
+    myChart.setOption({
+      series: [
+        {
+          center: [targetX, targetY],
+        },
+      ],
+    });
+
+    // myChart.dispatchAction({
+    //   type: 'graphRoam',
+    //   dx: 100, // x方向平移100像素
+    //   dy: 100   // y方向平移50像素
+    // });
+  }
+}
 </script>
 
 <style scoped lang="scss">
