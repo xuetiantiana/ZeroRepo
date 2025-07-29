@@ -29,11 +29,11 @@ const isDocstringExpanded = (key: string) => {
 <template>
   <div class="body" v-if="currNode && currNode.metaData">
     <div class="info-item">
-      <span class="info-label">node:</span>
+      <span class="info-label">Node:</span>
       <span class="info-value">{{ currNode.metaData.node }}</span>
     </div>
     <div class="info-item">
-      <span class="info-label">feature_path:</span>
+      <span class="info-label">Feature Path:</span>
       <span class="info-value">{{ currNode.metaData.feature_path }}</span>
     </div>
     <div

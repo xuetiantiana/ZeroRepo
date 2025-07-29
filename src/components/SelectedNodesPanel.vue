@@ -79,11 +79,13 @@ function handleNodeSearch(selectedIndex) {
             "
           >
             <div class="node-header">
-              <h3 class="node-title">
+              <h3 class="node-title" style="padding-right: 0;">
                 <span style="color: #2b7ce9">CurrNode: &nbsp;</span>
                 {{
                   currNode && currNode.metaData
-                    ? currNode.metaData.node
+                    ? currNode.originalName
+                      ? currNode.originalName + " (" + currNode.name + ")"
+                      : currNode.metaData.node
                     : "节点信息"
                 }}
               </h3>
@@ -106,8 +108,7 @@ function handleNodeSearch(selectedIndex) {
           "
         >
           <h4 style="margin: 0 0 1em">
-            已选择的节点 ({{ selectedNodeList.length }} /
-            {{ maxSelectedNodes }})
+            已选择的节点 ({{ selectedNodeList.length }})
           </h4>
           <el-select
             v-model="searchValue"
@@ -143,7 +144,11 @@ function handleNodeSearch(selectedIndex) {
                   class="node-title"
                   :style="{ color: currNode.selectedColor }"
                 >
-                  {{ currNode.metaData.node }}
+                  {{
+                    currNode.originalName
+                      ? currNode.originalName + " (" + currNode.name + ")"
+                      : currNode.metaData.node
+                  }}
                 </h3>
                 <button
                   class="close-btn"
@@ -170,7 +175,7 @@ function handleNodeSearch(selectedIndex) {
 <style scoped  lang="scss">
 /* ==================== 左侧边栏样式 ==================== */
 .sidebar {
-  
+  font-size: 14px;
   height: 100%;
   width: 100%;
   background: #f8f9fa;
@@ -185,7 +190,7 @@ function handleNodeSearch(selectedIndex) {
     display: flex;
     flex-direction: row;
     justify-content: space-between;
-    padding: 0.5em 1em;
+    padding: 0.8em 1em;
     border-bottom: 4px solid #dee2e6;
   }
   .sidebar-content {
@@ -241,11 +246,13 @@ function handleNodeSearch(selectedIndex) {
     margin: 0;
     font-weight: bold;
     color: #333;
+    font-size: 1.1em;
+    padding-right: 1em;
   }
 
   .close-btn {
     position: absolute;
-    right: 10px;
+    right: 5px;
     top: 10px;
     background: none;
     border: none;
@@ -265,7 +272,7 @@ function handleNodeSearch(selectedIndex) {
   .node-body {
     padding: 15px;
     max-height: 200px;
-    min-height: 150px;
+    min-height: 100px;
     overflow-y: auto;
   }
 }

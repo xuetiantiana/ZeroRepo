@@ -22,6 +22,15 @@
           >
             <span class="icon">+</span>
           </div>
+
+          <div
+            class="showAllNodes"
+            style="position: absolute; right: 20px; top: 5px"
+          >
+            <el-button type="primary" @click="showAllNodes(5)"
+              >展开所有</el-button
+            >
+          </div>
         </div>
       </div>
     </div>
@@ -45,7 +54,7 @@ let isDraggingOrZooming = false; // 标记是否正在拖拽或缩放
 let currentHoverNode = null; // 当前悬停的节点
 let plusButton = null; // 加号按钮DOM元素
 const selectedNodeList = ref([]);
-const maxSelectedNodes = ref(10); // 最多可选择的节点数量
+const maxSelectedNodes = ref(1000000); // 最多可选择的节点数量
 const currNode = ref();
 
 // 监听最大选择数量的变化
@@ -114,6 +123,20 @@ onMounted(() => {
   });
 });
 
+const showAllNodes = (level) => {
+  updateVisibleNodes(level);
+  graphData = convertTreeToGraph(treeRoot);
+  myChart.setOption({
+    series: [{ data: graphData.nodes, links: graphData.links }],
+  });
+  myChart.setOption({
+    series: [
+      {
+        center: [0, 0],
+      },
+    ],
+  });
+};
 const dataFlowGraph = [];
 const setDataFlowGraph = (data_flow_graph) => {
   data_flow_graph.forEach((flow) => {
@@ -200,7 +223,7 @@ const getSymbolSize = (level) => {
   } else if (level == 2) {
     size = 80 / scaleNum;
   } else if (level == 3) {
-    size = 48 / scaleNum;
+    size = 60 / scaleNum;
   } else if (level == 4) {
     size = 38 / scaleNum;
   } else {
@@ -259,7 +282,7 @@ const getLabelStyle = (
     return {
       show: true,
       position: [offite_xy.dx + r, offite_xy.dy + r], // 以节点为锚点
-      fontSize: 12,
+      fontSize: 10,
       color: "#333",
       fontWeight: "normal",
       align: "center",
@@ -271,44 +294,6 @@ const getLabelStyle = (
       //   10 / scaleNum/2,
       //   10 / scaleNum/2,
       // ],
-      formatter: function (params) {
-        var name = params.name || "";
-        if (params && params.data && params.data.level >= 5) {
-          let newLabel =
-            deg > 90 && deg < 270
-              ? `{main|${name}    } {sub|}`
-              : `{sub|} {main|    ${name}}`;
-          return newLabel;
-        }
-        // 处理长文本换行
-        var spaceParts = name.split(" ");
-        var lines = [];
-        for (var i = 0; i < spaceParts.length; i++) {
-          var part = spaceParts[i];
-          if (part.indexOf("-") !== -1) {
-            var dashParts = part.split("-");
-            for (var j = 0; j < dashParts.length; j++) {
-              lines.push(dashParts[j]);
-              if (j < dashParts.length - 1) lines.push("-");
-            }
-          } else {
-            lines.push(part);
-          }
-        }
-        return lines.join("\n");
-      },
-
-      rich: {
-        main: {
-          fontSize: 10,
-          color: "#000",
-        },
-        sub: {
-          fontSize: 10,
-          color: "rgba(0, 0, 0, .1)", // ✅ 半透明黑色
-          height: -1,
-        },
-      },
     };
   }
   let obj = {};
@@ -321,7 +306,7 @@ const getLabelStyle = (
   } else {
     obj = {
       position: "inside",
-      fontSize: 11,
+      fontSize: level === 1 ? 12 : 11,
       color: "#333",
       verticalAlign: "middle",
       align: "center",
@@ -350,7 +335,7 @@ const getExtendedPoint = (x0, y0, x1, y1, r = 30, labelText) => {
   const charWidth = 3;
   const labelLen = labelText.length * charWidth;
   // console.log("width2", labelLen);
-  r = measureTextWidth(labelText) / 2 + 12;
+  r = measureTextWidth(labelText) / 2 + 20;
   // console.log("labelText", labelText.length, r);
   const dx = x1 - x0;
   const dy = y1 - y0;
@@ -369,10 +354,10 @@ const getExtendedPoint = (x0, y0, x1, y1, r = 30, labelText) => {
 const getRadiusForLevel = (level) => {
   const radiusMap = {
     0: 0, // 根节点在中心
-    1: 100, // 第一层距离中心80px
-    2: 180, // 第二层距离中心160px
-    3: 270, // 第三层距离中心240px
-    4: 360, // 第四层距离中心320px
+    1: 110, // 第一层距离中心80px
+    2: 200, // 第二层距离中心160px
+    3: 300, // 第三层距离中心240px
+    4: 400, // 第四层距离中心320px
     5: 500, // 第五层距离中心380px
   };
 
@@ -478,7 +463,10 @@ const convertTreeToGraph = (treeData) => {
     sectorEnd = 2 * Math.PI
   ) {
     if (!node || !node.name || node.visible === false) return;
-    const nodeId = level + "_" + (node.feature_path || node.name);
+    const nodeId =
+      level <= 1
+        ? level + "_" + (node.feature_path || node.name)
+        : level + "_" + node.id + "_" + (node.feature_path || node.name);
 
     // 根据level获取当前节点应该的径向距离
     const currentRadius = getRadiusForLevel(level);
@@ -502,6 +490,7 @@ const convertTreeToGraph = (treeData) => {
     const graphNode = {
       id: nodeId,
       name: node.name || "Unknown",
+      originalName: node.originalName ? node.originalName : null,
       feature_path: node.feature_path || "",
       level: level,
       metaData: node.metaData,
@@ -536,6 +525,8 @@ const convertTreeToGraph = (treeData) => {
         source: parentId,
         target: nodeId,
         lineStyle: node.lineStyle || getLineStyle(level),
+        // symbol: ["circle", "arrow"], // 线尾显示箭头
+        // symbolSize: [4, 8], // 箭头大小
       });
     }
 
@@ -663,7 +654,11 @@ const initGraphChart = (myChart) => {
         // console.log(params);
         if (params.dataType === "node") {
           const nodeData = params.data;
-          let content = `<strong>Node: </strong> ${nodeData.name}<br/>`;
+          let content = `<strong>Node: </strong>${
+            nodeData.originalName
+              ? nodeData.originalName + " (" + nodeData.name + ")"
+              : nodeData.name
+          } <br/>`;
           if (nodeData.feature_path) {
             content += `<strong>Feature Path: </strong> ${nodeData.feature_path}<br/>`;
           }
@@ -721,23 +716,25 @@ const initGraphChart = (myChart) => {
           // overflow: "truncate",
           formatter: function (params) {
             var name = params.name || "";
-            if (params && params.data && params.data.level >= 5) {
-              return name + " - 111111" + name;
+            if (params && params.data && params.data.level >= 3) {
+              return name;
             }
             // 处理长文本换行
             var spaceParts = name.split(" ");
             var lines = [];
             for (var i = 0; i < spaceParts.length; i++) {
               var part = spaceParts[i];
-              if (part.indexOf("-") !== -1) {
-                var dashParts = part.split("-");
-                for (var j = 0; j < dashParts.length; j++) {
-                  lines.push(dashParts[j]);
-                  if (j < dashParts.length - 1) lines.push("-");
-                }
-              } else {
-                lines.push(part);
-              }
+              // if (part.indexOf("-") !== -1) {
+              //   var dashParts = part.split("-");
+              //   for (var j = 0; j < dashParts.length; j++) {
+              //     lines.push(dashParts[j]);
+              //     if (j < dashParts.length - 1) lines.push("-");
+              //   }
+              // } else {
+              //   lines.push(part);
+              // }
+
+              lines.push(part);
             }
             return lines.join("\n");
           },
@@ -842,30 +839,61 @@ const initGraphChart = (myChart) => {
 
   let timer2 = null;
   // 监听拖拽开始事件 - 隐藏加号
+
+  let lastTransform = myChart
+    .getModel()
+    .getSeriesByIndex(0)
+    .coordinateSystem.getRoamTransform();
   myChart.on("graphRoam", function () {
     // 设置拖拽/缩放状态
     isDraggingOrZooming = true;
 
     // 拖拽或缩放时隐藏加号
     console.log("拖拽/缩放开始", currentHoverNode);
-    hidePlusButton();
-    if (timer2) {
-      clearTimeout(timer2);
-      timer2 = null;
+
+    const seriesModel = myChart.getModel().getSeriesByIndex(0);
+    const transform = seriesModel.coordinateSystem.getRoamTransform();
+    let isZoom = false;
+    let isPan = false;
+    // 检查仿射矩阵格式（通常是 [a, b, c, d, tx, ty]）
+    if (Array.isArray(transform) && transform.length === 6) {
+      const [a, b, c, d, tx, ty] = transform;
+      const [la, lb, lc, ld, ltx, lty] = lastTransform;
+
+      isZoom = a !== la || d !== ld; // a/d 是 scaleX / scaleY
+      isPan = tx !== ltx || ty !== lty; // tx/ty 是平移
+    } else if (
+      transform &&
+      transform.zoom !== undefined &&
+      transform.position
+    ) {
+      isZoom = transform.zoom !== lastTransform.zoom;
+      isPan =
+        transform.position[0] !== lastTransform.position[0] ||
+        transform.position[1] !== lastTransform.position[1];
+    }
+    lastTransform = transform;
+    if (isZoom) {
+      if (timer2) {
+        clearTimeout(timer2);
+        timer2 = null;
+      }
+
+      timer2 = setTimeout(() => {
+        // 重新设置图表选项, fix bug：加号位置错误
+        console.log("///// 重新设置图表选项");
+        myChart.setOption({
+          series: [
+            {
+              data: graphData.nodes,
+              links: graphData.links,
+            },
+          ],
+        });
+      }, 500);
     }
 
-    timer2 = setTimeout(() => {
-      // 重新设置图表选项, fix bug：加号位置错误
-      console.log("///// 重新设置图表选项");
-      myChart.setOption({
-        series: [
-          {
-            data: graphData.nodes,
-            links: graphData.links,
-          },
-        ],
-      });
-    }, 500);
+    hidePlusButton();
 
     // 延迟重置状态，确保拖拽/缩放操作完成
     setTimeout(() => {
@@ -1029,8 +1057,8 @@ function centerViewToNode(node) {
     myChart.setOption({
       series: [
         {
-          // center: [targetX, targetY],
-          center: [node.x, node.y],
+          center: [targetX, targetY],
+          // center: [node.x, node.y],
         },
       ],
     });
@@ -1073,6 +1101,7 @@ const handlePlusClick = () => {
       // 如果未选择且未超过限制，添加到列表中
       console.log("点击加号，添加节点:", currentHoverNode);
       selectedNodeList.value.unshift(currentHoverNode);
+      console.log("!!!!", selectedNodeList);
     }
 
     console.log("当前选择的节点列表:", selectedNodeList.value);

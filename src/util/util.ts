@@ -161,6 +161,9 @@ export const hancelData = (data1, mapData) => {
 
     console.log("数据转换完成:", convertedData);
     console.log(`处理了 ${allChildren.length} 个subtree组`);
+
+    // 处理name
+    processNodeNames(convertedData)
     // 处理map数据
     getNodeModalDetail(convertedData, mapData)
     console.log(convertedData)
@@ -171,6 +174,76 @@ export const hancelData = (data1, mapData) => {
   return data1;
 };
 
+
+// 遍历树形数据，根据name的字符长度处理（太长使用简写）
+function processNodeNames(treeData) {
+  // 遍历树形数据并处理每个节点的 name
+  function traverse(node) {
+    if (!node || !node.name) return;
+
+    // 如果节点的 level 小于等于 2，不处理
+    if (node.level > 2 && node.level != 5) {
+      // 根据空格拆分 name
+
+      const replaced = node.name.replace(/\b(And|and)\b/g, "&");
+      console.log("replaced", replaced)
+      const nameParts = replaced.split(" ");
+      let processedName;
+
+
+      // 判断是否所有单词的长度都不超过 13
+      let oneWordMaxLength = node.level == 3 ? 10 : 8
+      const allShortEnough = nameParts.length < 3 && nameParts.every((part) => part.length <= oneWordMaxLength);
+
+      if (allShortEnough) {
+        // 如果所有单词长度都不超过 13，直接拼接字符串
+        processedName = nameParts.join("\n");
+      } else {
+        // 处理单词中包含 `-` 或 `&` 的情况
+        const processWord = (word: string, len: number) => {
+          if (word.includes("-")) {
+            // 按 `-` 拆分单词并使用 `-` 连接
+            const subParts = word.split("-");
+            return subParts
+              .map((subPart, index) => (index === 0 ? subPart.slice(0, len) : subPart.slice(0, len)))
+              .join("-");
+          } else if (word.includes("&")) {
+            // 按 `&` 拆分单词并使用 `&` 连接
+            const subParts = word.split("&");
+            return subParts
+              .map((subPart, index) => (index === 0 ? subPart.slice(0, len) : subPart.slice(0, len)))
+              .join("&");
+          }
+          return word.slice(0, len); // 默认取前 `len` 个字母
+        };
+
+        if (nameParts.length <= 2) {
+          let oneWordLength = node.level == 3 ? 4 : 3
+          // 如果长度小于等于 2，使用每个单词的前 3 个字母缩写
+          processedName = nameParts.map((part) => processWord(part, oneWordLength)).join("\n");
+        } else {
+          // 如果长度大于 2，使用每个单词的首字母
+          processedName = nameParts.map((part) => processWord(part, 1)).join("");
+        }
+      }
+
+
+      // 更新节点的 name
+      node.originalName = node.name;
+      node.name = processedName;
+    }
+
+
+
+    // 递归处理子节点
+    if (node.children && Array.isArray(node.children)) {
+      node.children.forEach(traverse);
+    }
+  }
+
+  // 开始遍历树形数据
+  traverse(treeData);
+}
 
 // 遍历树形数据并为每个节点匹配mapData中的详细信息
 export const getNodeModalDetail = (treeData, mapData) => {
