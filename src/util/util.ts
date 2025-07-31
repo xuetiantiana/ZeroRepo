@@ -186,7 +186,6 @@ function processNodeNames(treeData) {
       // 根据空格拆分 name
 
       const replaced = node.name.replace(/\b(And|and)\b/g, "&");
-      console.log("replaced", replaced)
       const nameParts = replaced.split(" ");
       let processedName;
 

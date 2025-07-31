@@ -188,17 +188,23 @@ function createFourHiddenNodesFunc(distance) {
 
 const createFourHiddenNodes = createFourHiddenNodesFunc(500);
 
+// 根据level设置节点距离圆心的距离
+const getRadiusForLevel = (level) => {
+  const radiusMap = {
+    0: 0, // 根节点在中心
+    1: 110, // 第一层距离中心80px
+    2: 210, // 第二层距离中心160px
+    3: 310, // 第三层距离中心240px
+    4: 420, // 第四层距离中心320px
+    5: 500, // 第五层距离中心380px
+  };
+
+  // 如果level超过6，使用level 6的距离，或者可以继续递增
+  return radiusMap[level] || 420 + (level - 6) * 40;
+};
+
 // 定义每一圈的颜色（5层蓝色主色调，突出 #0078D4，层级递进更明显）
 const ringColors = [
-  "#686759", // root/中心，最深
-  "#B04B35", // 红色
-  "#E37C05", // 橙色
-  "#5F9DBF", // 绿色
-  "#568651", // 橄榄绿
-  "#B89C80", // 黄色
-];
-
-const ringColors2 = [
   "#686759", // root/中心，最深
   "#4EA3F9", // 红色
   "#528FB7", // 橙色
@@ -206,14 +212,15 @@ const ringColors2 = [
   "#40C2F2", // 橄榄绿
   "#BAD7F3", // 黄色
 ];
-// const ringColors2 = [
-//   "#686759", // root/中心，最深
-//   "#b04b354d", // 红色
-//   "#e37c055e", // 橙色
-//   "#5f9dbf63", // 绿色
-//   "#56865169", // 橄榄绿
-//   "#B89C80", // 黄色
-// ];
+
+// 定义每个模块node连线的颜色
+const lineColors = {
+  "Advanced Modeling Techniques": "#B89C80",
+  Algorithms: "#B04B35",
+  Workflow: "#E37C05",
+  "Data Engineering": "#5F9DBF",
+};
+
 const getSymbolSize = (level) => {
   let size;
   if (level == 0) {
@@ -223,7 +230,7 @@ const getSymbolSize = (level) => {
   } else if (level == 2) {
     size = 80 / scaleNum;
   } else if (level == 3) {
-    size = 60 / scaleNum;
+    size = 70 / scaleNum;
   } else if (level == 4) {
     size = 38 / scaleNum;
   } else {
@@ -235,25 +242,27 @@ const getSymbolSize = (level) => {
 const getItemStyle = (level) => {
   if (level <= 1) {
     return {
-      color: ringColors2[level % ringColors2.length],
-      borderColor: ringColors2[level % ringColors2.length],
+      color: ringColors[level % ringColors.length],
+      borderColor: ringColors[level % ringColors.length],
       borderWidth: 0.5,
       opacity: 1,
     };
   } else {
     return {
-      color: ringColors2[level % ringColors2.length],
-      borderColor: ringColors2[level % ringColors2.length],
+      color: ringColors[level % ringColors.length],
+      borderColor: ringColors[level % ringColors.length],
       borderWidth: 0.5,
       // opacity: 1,
     };
   }
 };
 
-const getLineStyle = (level) => {
+const getLineStyle = (level, node) => {
   return {
     color:
-      level == 1 ? "rgba(0,0,0,.1)" : ringColors[level % ringColors.length],
+      level == 1
+        ? "rgba(0,0,0,.1)"
+        : lineColors[node.level1Root] || "rgba(0,0,0,.4)",
     width: 1,
   };
 };
@@ -348,21 +357,6 @@ const getExtendedPoint = (x0, y0, x1, y1, r = 30, labelText) => {
     dy: offsetY,
     angleDeg: angleDeg,
   };
-};
-
-// 根据level设置节点距离圆心的距离
-const getRadiusForLevel = (level) => {
-  const radiusMap = {
-    0: 0, // 根节点在中心
-    1: 110, // 第一层距离中心80px
-    2: 200, // 第二层距离中心160px
-    3: 300, // 第三层距离中心240px
-    4: 400, // 第四层距离中心320px
-    5: 500, // 第五层距离中心380px
-  };
-
-  // 如果level超过6，使用level 6的距离，或者可以继续递增
-  return radiusMap[level] || 420 + (level - 6) * 40;
 };
 
 // 将树形数据转换为 Graph 数据格式
@@ -524,7 +518,7 @@ const convertTreeToGraph = (treeData) => {
       links.push({
         source: parentId,
         target: nodeId,
-        lineStyle: node.lineStyle || getLineStyle(level),
+        lineStyle: node.lineStyle || getLineStyle(level, node),
         // symbol: ["circle", "arrow"], // 线尾显示箭头
         // symbolSize: [4, 8], // 箭头大小
       });
@@ -890,7 +884,7 @@ const initGraphChart = (myChart) => {
             },
           ],
         });
-      }, 500);
+      }, 300);
     }
 
     hidePlusButton();
