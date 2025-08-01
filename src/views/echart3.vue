@@ -27,8 +27,24 @@
             class="showAllNodes"
             style="position: absolute; right: 20px; top: 5px"
           >
-            <el-button type="primary" @click="showAllNodes(5)"
-              >展开所有</el-button
+            <el-button
+              style="width: 120px"
+              color="rgb(43, 124, 233)"
+              type="primary"
+              @click="showAllNodes(isShowAllNodes)"
+              >{{
+                isShowAllNodes ? "Close All Nodes" : "Show All Nodes"
+              }}</el-button
+            >
+          </div>
+          <div style="position: absolute; right: 150px; top: 5px">
+            <el-button
+              style="width: 120px"
+              color="rgb(43, 124, 233)"
+              type="primary"
+              @click="centerEchart"
+            >
+              Center View</el-button
             >
           </div>
         </div>
@@ -57,6 +73,11 @@ const selectedNodeList = ref([]);
 const maxSelectedNodes = ref(1000000); // 最多可选择的节点数量
 const currNode = ref();
 
+let initialTranslateX = 0; //记录初始echart的偏移，当视图拖动时候，根据这个数据判断是否拖拽超过一定范围
+let initialTranslateY = 0;
+
+let GolbalFilteredTree = [];
+
 // 监听最大选择数量的变化
 watch(maxSelectedNodes, (newValue, oldValue) => {
   console.log(`最大选择数量从 ${oldValue} 变更为 ${newValue}`);
@@ -69,20 +90,27 @@ watch(maxSelectedNodes, (newValue, oldValue) => {
     alert(`由于限制变更，已移除 ${removedNodes.length} 个节点`);
   }
 });
-
+let echartWidth = 1000;
+let echartHeight = 1000;
 onMounted(() => {
-  const width = document.getElementById("echart").getBoundingClientRect().width;
-  const height = document
+  echartWidth = document.getElementById("echart").getBoundingClientRect().width;
+  echartHeight = document
     .getElementById("echart")
     .getBoundingClientRect().height;
-  const minScreenSize = Math.min(width, height);
+  const minScreenSize = Math.min(echartWidth, echartHeight);
 
-  scaleNum = Math.max(2200 / minScreenSize, 1);
+  scaleNum = Math.max(2500 / minScreenSize, 1);
 
   // 获取加号按钮DOM元素并设置事件
   plusButton = document.getElementById("plusButton");
   setupPlusButtonEvents();
-  console.log("屏幕尺寸：", width, height, 2200 / minScreenSize, scaleNum);
+  console.log(
+    "屏幕尺寸：",
+    echartWidth,
+    echartHeight,
+    2500 / minScreenSize,
+    scaleNum
+  );
 
   // 获取 DOM 元素
   const chartDom = document.getElementById("echart");
@@ -123,7 +151,10 @@ onMounted(() => {
   });
 });
 
+const isShowAllNodes = ref(false);
 const showAllNodes = (level) => {
+  isShowAllNodes.value = !isShowAllNodes.value;
+  level = isShowAllNodes.value ? 5 : 1;
   updateVisibleNodes(level);
   graphData = convertTreeToGraph(treeRoot);
   myChart.setOption({
@@ -186,16 +217,16 @@ function createFourHiddenNodesFunc(distance) {
   }));
 }
 
-const createFourHiddenNodes = createFourHiddenNodesFunc(500);
+const createFourHiddenNodes = createFourHiddenNodesFunc(680);
 
 // 根据level设置节点距离圆心的距离
 const getRadiusForLevel = (level) => {
   const radiusMap = {
     0: 0, // 根节点在中心
-    1: 110, // 第一层距离中心80px
-    2: 210, // 第二层距离中心160px
+    1: 125, // 第一层距离中心80px
+    2: 215, // 第二层距离中心160px
     3: 310, // 第三层距离中心240px
-    4: 420, // 第四层距离中心320px
+    4: 400, // 第四层距离中心320px
     5: 500, // 第五层距离中心380px
   };
 
@@ -206,19 +237,19 @@ const getRadiusForLevel = (level) => {
 // 定义每一圈的颜色（5层蓝色主色调，突出 #0078D4，层级递进更明显）
 const ringColors = [
   "#686759", // root/中心，最深
-  "#4EA3F9", // 红色
-  "#528FB7", // 橙色
-  "#52E0FC", // 绿色
-  "#40C2F2", // 橄榄绿
-  "#BAD7F3", // 黄色
+  "#0068B8",
+  "#62BDE4",
+  "#52E0FC",
+  "#86DCF8",
+  "#BAD7F3",
 ];
 
 // 定义每个模块node连线的颜色
 const lineColors = {
-  "Advanced Modeling Techniques": "#B89C80",
-  Algorithms: "#B04B35",
-  Workflow: "#E37C05",
-  "Data Engineering": "#5F9DBF",
+  "Advanced Modeling Techniques": "#FF8364",
+  Algorithms: "#5414E9",
+  Workflow: "#00C6A2",
+  "Data Engineering": "#0368FF",
 };
 
 const getSymbolSize = (level) => {
@@ -239,7 +270,8 @@ const getSymbolSize = (level) => {
   return size;
 };
 
-const getItemStyle = (level) => {
+const getItemStyle = (level, node) => {
+  console.log("!!@@@@", node, currNode.value);
   if (level <= 1) {
     return {
       color: ringColors[level % ringColors.length],
@@ -248,17 +280,24 @@ const getItemStyle = (level) => {
       opacity: 1,
     };
   } else {
+    let shadow = false;
+    if (currNode.value && currNode.value.id2 == node.id) {
+      shadow = true;
+    }
     return {
       color: ringColors[level % ringColors.length],
       borderColor: ringColors[level % ringColors.length],
       borderWidth: 0.5,
       // opacity: 1,
+      shadowColor: shadow ? "rgb(43, 124, 233)" : "transparent",
+      shadowBlur: 20,
     };
   }
 };
 
 const getLineStyle = (level, node) => {
   return {
+    // color:  level == 1 ? "rgba(0,0,0,.1)" : ringColors[level % ringColors.length],
     color:
       level == 1
         ? "rgba(0,0,0,.1)"
@@ -316,7 +355,7 @@ const getLabelStyle = (
     obj = {
       position: "inside",
       fontSize: level === 1 ? 12 : 11,
-      color: "#333",
+      color: level == 1 ? "#fff" : "#333",
       verticalAlign: "middle",
       align: "center",
       fontWeight: level === 1 ? "bold" : "normal",
@@ -344,7 +383,7 @@ const getExtendedPoint = (x0, y0, x1, y1, r = 30, labelText) => {
   const charWidth = 3;
   const labelLen = labelText.length * charWidth;
   // console.log("width2", labelLen);
-  r = measureTextWidth(labelText) / 2 + 20;
+  r = measureTextWidth(labelText) / 2 + 25;
   // console.log("labelText", labelText.length, r);
   const dx = x1 - x0;
   const dy = y1 - y0;
@@ -374,6 +413,7 @@ const convertTreeToGraph = (treeData) => {
   }
   const filteredTree = filterVisible(treeData); // 只处理可见节点
   console.log("开始转换为 Graph 数据格式 treeData", filteredTree);
+  GolbalFilteredTree = filteredTree;
 
   const nodes = [];
   const links = [];
@@ -483,6 +523,7 @@ const convertTreeToGraph = (treeData) => {
     // 传递label文本和半径给
     const graphNode = {
       id: nodeId,
+      id2: node.id,
       name: node.name || "Unknown",
       originalName: node.originalName ? node.originalName : null,
       feature_path: node.feature_path || "",
@@ -503,7 +544,7 @@ const convertTreeToGraph = (treeData) => {
         currentRadius,
         { x: x, y: y }
       ),
-      itemStyle: node.itemStyle || getItemStyle(level),
+      itemStyle: node.itemStyle || getItemStyle(level, node),
       category: level, // 用于分类着色
     };
 
@@ -684,13 +725,14 @@ const initGraphChart = (myChart) => {
       {
         type: "graph",
         layout: "none", // 使用固定位置布局
-        roam: true, // 允许缩放和拖动
+        // roam: true, // 允许缩放和拖动
+        roam: "move",
         zoom: scaleNum, // 🌟 默认缩放比例（越小越缩）
         center: [0, 0],
-        scaleLimit: {
-          min: scaleNum * 0.7, // 🌟 最小缩放
-          max: scaleNum * 1.2, // 🌟 最大缩放
-        },
+        // scaleLimit: {
+        //   min: scaleNum, // 🌟 最小缩放
+        //   max: scaleNum, // 🌟 最大缩放
+        // },
         data: graphData.nodes,
         links: graphData.links,
 
@@ -763,14 +805,6 @@ const initGraphChart = (myChart) => {
 
   myChart.setOption(option);
 
-  // 初始化时显示默认加号（在根节点旁边）
-  setTimeout(() => {
-    if (graphData.nodes && graphData.nodes.length > 0) {
-      const rootNode = graphData.nodes[0]; // 假设第一个节点是根节点
-      showPlusButton(rootNode);
-    }
-  }, 100); // 延迟一点确保图表完全渲染
-
   // 添加鼠标悬停事件 - 显示加号
   myChart.on("mouseover", function (params) {
     // 如果正在拖拽或缩放，不处理mouseover事件
@@ -831,62 +865,28 @@ const initGraphChart = (myChart) => {
     }
   });
 
-  let timer2 = null;
-  // 监听拖拽开始事件 - 隐藏加号
+  // let timer2 = null;
+  // // 监听拖拽开始事件 - 隐藏加号
 
-  let lastTransform = myChart
-    .getModel()
-    .getSeriesByIndex(0)
-    .coordinateSystem.getRoamTransform();
+  // let lastTransform = myChart
+  //   .getModel()
+  //   .getSeriesByIndex(0)
+  //   .coordinateSystem.getRoamTransform();
+
+  // 获取初始偏移量
+  setTimeout(() => {
+    const seriesModel = myChart.getModel().getSeriesByIndex(0);
+    const transform = seriesModel.coordinateSystem.getRoamTransform();
+    [, , , , initialTranslateX, initialTranslateY] = transform;
+
+    console.log("初始偏移量:", { initialTranslateX, initialTranslateY });
+  }, 100);
+
   myChart.on("graphRoam", function () {
     // 设置拖拽/缩放状态
     isDraggingOrZooming = true;
 
     // 拖拽或缩放时隐藏加号
-    console.log("拖拽/缩放开始", currentHoverNode);
-
-    const seriesModel = myChart.getModel().getSeriesByIndex(0);
-    const transform = seriesModel.coordinateSystem.getRoamTransform();
-    let isZoom = false;
-    let isPan = false;
-    // 检查仿射矩阵格式（通常是 [a, b, c, d, tx, ty]）
-    if (Array.isArray(transform) && transform.length === 6) {
-      const [a, b, c, d, tx, ty] = transform;
-      const [la, lb, lc, ld, ltx, lty] = lastTransform;
-
-      isZoom = a !== la || d !== ld; // a/d 是 scaleX / scaleY
-      isPan = tx !== ltx || ty !== lty; // tx/ty 是平移
-    } else if (
-      transform &&
-      transform.zoom !== undefined &&
-      transform.position
-    ) {
-      isZoom = transform.zoom !== lastTransform.zoom;
-      isPan =
-        transform.position[0] !== lastTransform.position[0] ||
-        transform.position[1] !== lastTransform.position[1];
-    }
-    lastTransform = transform;
-    if (isZoom) {
-      if (timer2) {
-        clearTimeout(timer2);
-        timer2 = null;
-      }
-
-      timer2 = setTimeout(() => {
-        // 重新设置图表选项, fix bug：加号位置错误
-        console.log("///// 重新设置图表选项");
-        myChart.setOption({
-          series: [
-            {
-              data: graphData.nodes,
-              links: graphData.links,
-            },
-          ],
-        });
-      }, 300);
-    }
-
     hidePlusButton();
 
     // 延迟重置状态，确保拖拽/缩放操作完成
@@ -894,6 +894,52 @@ const initGraphChart = (myChart) => {
       isDraggingOrZooming = false;
       console.log("拖拽/缩放结束");
     }, 300); // 300ms延迟，可以根据需要调整
+
+    // 计算偏移是否到边界，如果是居中视图
+    calculateOffsetAndResetGraphPosition();
+
+    // // 缩放的时候重新设置setoption（避免加号图标定位错误）
+    // const seriesModel = myChart.getModel().getSeriesByIndex(0);
+    // const transform = seriesModel.coordinateSystem.getRoamTransform();
+    // let isZoom = false;
+    // let isPan = false;
+    // // 检查仿射矩阵格式（通常是 [a, b, c, d, tx, ty]）
+    // if (Array.isArray(transform) && transform.length === 6) {
+    //   const [a, b, c, d, tx, ty] = transform;
+    //   const [la, lb, lc, ld, ltx, lty] = lastTransform;
+
+    //   isZoom = a !== la || d !== ld; // a/d 是 scaleX / scaleY
+    //   isPan = tx !== ltx || ty !== lty; // tx/ty 是平移
+    // } else if (
+    //   transform &&
+    //   transform.zoom !== undefined &&
+    //   transform.position
+    // ) {
+    //   isZoom = transform.zoom !== lastTransform.zoom;
+    //   isPan =
+    //     transform.position[0] !== lastTransform.position[0] ||
+    //     transform.position[1] !== lastTransform.position[1];
+    // }
+    // lastTransform = transform;
+    // if (isZoom) {
+    //   if (timer2) {
+    //     clearTimeout(timer2);
+    //     timer2 = null;
+    //   }
+
+    //   timer2 = setTimeout(() => {
+    //     // 重新设置图表选项, fix bug：加号位置错误
+    //     console.log("///// 重新设置图表选项");
+    //     myChart.setOption({
+    //       series: [
+    //         {
+    //           data: graphData.nodes,
+    //           links: graphData.links,
+    //         },
+    //       ],
+    //     });
+    //   }, 300);
+    // }
   });
 
   // 监听鼠标按下事件 - 准备拖拽时隐藏加号
@@ -921,6 +967,12 @@ const initGraphChart = (myChart) => {
     // 节点点击事件
     if (params.dataType === "node") {
       console.log("params.data", params.data);
+      if (params.data.level > 1) {
+        currNode.value = params.data;
+      } else {
+        currNode.value = null;
+      }
+
       const featurePath = params.data.feature_path;
       toggleChildrenVisibility(featurePath);
       graphData = convertTreeToGraph(treeRoot);
@@ -928,78 +980,97 @@ const initGraphChart = (myChart) => {
         series: [{ data: graphData.nodes, links: graphData.links }],
       });
       centerViewToNode(params.data);
-      if (params.data.level > 1) {
-        currNode.value = params.data;
-      }
     }
   });
+};
 
-  // myChart.on("mousemove", function (params) {
-  //   if(togggon) {
-  //     return;
-  //   }
-  //   console.log("mousemove", params);
-  //   if (params.dataType === "node") {
-  //     const offsetX = params.event.offsetX;
-  //     const offsetY = params.event.offsetY;
-  //     // 只适用于 graph + layout: 'none'
-  //     const [logicX, logicY] = myChart.convertFromPixel({ seriesIndex: 0 }, [
-  //       offsetX,
-  //       offsetY,
-  //     ]);
-  //     // console.log(
-  //     //   "鼠标对应的 graph 坐标：",
-  //     //   logicX,
-  //     //   logicY,
-  //     //   params.data.id,
-  //     //   matchedIndex,
-  //     //   nodes.length
-  //     // );
-  //     myChart.getOption().series[0].emphasis.disabled = true;
-  //     if (params.dataType === "node" && params.data.level >= 5) {
-  //       myChart.getOption().series[0].emphasis.disabled = true; // 禁用所有 emphasis 效果
+const calculateOffsetAndResetGraphPosition = () => {
+  let depth = getMaxDepth(GolbalFilteredTree);
+  console.log("depth", depth);
 
-  //       console.log(logicX, params.data.x, logicY, params.data.y);
-  //       if (
-  //         Math.abs(logicX) + 5 < Math.abs(params.data.x) ||
-  //         Math.abs(logicY) + 5 < Math.abs(params.data.y)
-  //       ) {
-  //         // console.log("隐藏");
-  //         myChart.dispatchAction({ type: "hideTip" });
-  //       } else {
-  //         // console.log("显示");
-  //         myChart.dispatchAction({
-  //           type: "showTip",
-  //           seriesIndex: params.seriesIndex,
-  //           dataIndex: params.dataIndex,
-  //         });
-  //       }
-  //     } else {
-  //       // console.log("显示222");
-  //       myChart.dispatchAction({
-  //         type: "showTip",
-  //         seriesIndex: params.seriesIndex,
-  //         dataIndex: params.dataIndex,
-  //       });
-  //     }
-  //   } else if (params.dataType == "edge") {
-  //     console.log("dataType: 'edge'", params.dataIndex);
-  //     myChart.dispatchAction({
-  //       type: "showTip",
-  //       seriesIndex: params.seriesIndex,
-  //       dataIndex: params.dataIndex,
-  //       dataType: "edge",
-  //     });
-  //   } else {
-  //     myChart.dispatchAction({ type: "hideTip" });
-  //   }
-  // });
-  // myChart.getZr().on("mouseout", function () {
-  //   if(togggon) {
-  //     return;
-  //   }
-  //   myChart.dispatchAction({ type: "hideTip" });
-  // });
+  const seriesModel = myChart.getModel().getSeriesByIndex(0);
+  const transform = seriesModel.coordinateSystem.getRoamTransform();
+
+  // 获取当前平移量
+  const [, , , , translateX, translateY] = transform;
+
+  // 判断是否超出范围
+  // const maxOffset = 1400;
+  const echartContentWidth = (1500 / 5) * (depth - 1);
+  const maxOffsetW = Math.min(
+    (echartContentWidth - echartWidth) / 2 + echartWidth,
+    echartContentWidth
+  );
+  const maxOffsetH = Math.min(
+    (echartContentWidth - echartHeight) / 2 + echartHeight,
+    echartContentWidth
+  );
+
+  let adjustedTranslateX = translateX;
+  let adjustedTranslateY = translateY;
+  console.log(echartWidth, echartHeight);
+
+  if (Math.abs(translateX - initialTranslateX) > maxOffsetW) {
+    adjustedTranslateX =
+      translateX > initialTranslateX
+        ? initialTranslateX + maxOffsetW
+        : initialTranslateX - maxOffsetW;
+  }
+
+  if (Math.abs(translateY - initialTranslateY) > maxOffsetH) {
+    adjustedTranslateY =
+      translateY > initialTranslateY
+        ? initialTranslateY + maxOffsetH
+        : initialTranslateY - maxOffsetH;
+  }
+  console.log("&&", translateX, translateY);
+  console.log(
+    "x移动了多少",
+    Math.abs(translateX - initialTranslateX),
+    "最多可拖拽",
+    maxOffsetW
+  );
+  console.log(
+    "y移动了多少",
+    Math.abs(translateY - initialTranslateY),
+    "最多可拖拽",
+    maxOffsetH
+  );
+
+  // 如果需要调整，则强制回退到合法范围
+  if (adjustedTranslateX !== translateX || adjustedTranslateY !== translateY) {
+    centerEchart();
+    console.log(
+      "aaa",
+      adjustedTranslateX - translateX,
+      adjustedTranslateY - translateY
+    );
+    // myChart.dispatchAction({
+    //   type: "graphRoam",
+    //   zoom: 2,
+    //   dx: adjustedTranslateX - translateX,
+    //   dy: adjustedTranslateY - translateY,
+    // });
+  }
+};
+
+const centerEchart = () => {
+  myChart.setOption({
+    series: [
+      {
+        center: [0, 0],
+      },
+    ],
+  });
+  setTimeout(() => {
+    myChart.setOption({
+      series: [
+        {
+          data: graphData.nodes,
+        },
+      ],
+    });
+  }, 100);
 };
 
 // 新增：自动居中视图到点击节点
