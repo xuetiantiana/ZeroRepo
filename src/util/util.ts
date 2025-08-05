@@ -31,7 +31,7 @@ export const hancelData = (data1, mapData) => {
         return {
           name: item,
           feature_path: `${currentPath}/${item}`,
-          id: idCounter++,
+          idx: '' + idCounter++,
           level: level,
           level1Root: level1Root,
         };
@@ -49,7 +49,7 @@ export const hancelData = (data1, mapData) => {
           children.push({
             name: key,
             feature_path: `${currentPath}/${key}`,
-            id: idCounter++,
+            idx: '' + idCounter++,
             level: depth,
             level1Root: level1Root,
             children: value.map((item) => {
@@ -58,7 +58,7 @@ export const hancelData = (data1, mapData) => {
               return {
                 name: item,
                 feature_path: `${currentPath}/${key}/${item}`,
-                id: idCounter++,
+                idx: '' + idCounter++,
                 level: childLevel,
                 level1Root: level1Root,
               };
@@ -79,7 +79,7 @@ export const hancelData = (data1, mapData) => {
             children.push({
               name: key,
               feature_path: `${currentPath}/${key}`,
-              id: idCounter++,
+              idx: '' + idCounter++,
               level: depth,
               level1Root: level1Root,
               children: childResult,
@@ -89,7 +89,7 @@ export const hancelData = (data1, mapData) => {
             children.push({
               name: key,
               feature_path: `${currentPath}/${key}`,
-              id: idCounter++,
+              idx: '' + idCounter++,
               level: depth,
               children: childResult.children || [],
             });
@@ -135,7 +135,7 @@ export const hancelData = (data1, mapData) => {
         const groupRoot = {
           name: rootName,
           feature_path: `${rootName}`,
-          id: idCounter++,
+          idx: '' + idCounter++,
           level: 1, // 根节点为第1层
           children: convertedChildren,
           level1Root: rootName,
@@ -149,7 +149,7 @@ export const hancelData = (data1, mapData) => {
     const convertedData = {
       name: "root",
       feature_path: "root",
-      id: idCounter++,
+      idx: '' + idCounter++,
       level: 0, // 最顶层根节点
       children: allChildren,
       visible: true, // 根节点默认可见
@@ -193,10 +193,11 @@ function processNodeNames(treeData) {
       // 判断是否所有单词的长度都不超过 13
       let oneWordMaxLength = node.level == 3 ? 10 : 8
       const allShortEnough = nameParts.length < 3 && nameParts.every((part) => part.length <= oneWordMaxLength);
-
+      let hasAbbr = true
       if (allShortEnough) {
         // 如果所有单词长度都不超过 13，直接拼接字符串
         processedName = nameParts.join("\n");
+        hasAbbr = false
       } else {
         // 处理单词中包含 `-` 或 `&` 的情况
         const processWord = (word: string, len: number) => {
@@ -230,6 +231,7 @@ function processNodeNames(treeData) {
       // 更新节点的 name
       node.originalName = node.name;
       node.name = processedName;
+      node.hasAbbr = hasAbbr
     }
 
 
@@ -286,10 +288,8 @@ export const getNodeModalDetail = (treeData, mapData) => {
           if (typeof item === "object" && item !== null) {
             // 通过feature_path匹配
             const pathMatch = item.feature_path === node.feature_path;
-            // 或者通过节点名称匹配
-            const nameMatch = item.node === node.name;
 
-            return pathMatch || nameMatch;
+            return pathMatch;
           }
           return false;
         });
@@ -297,7 +297,7 @@ export const getNodeModalDetail = (treeData, mapData) => {
         if (matchedItem) {
           // 将匹配的数据添加到节点上
           node.metaData = matchedItem;
-          console.log(`为节点 ${node.name} 找到匹配数据:`, matchedItem);
+          // console.log(`为节点 ${node.name} 找到匹配数据:`, matchedItem);
         } else {
           console.log(`未找到节点 ${node.name} 的匹配数据, feature_path: ${node.feature_path}`);
         }
@@ -305,7 +305,7 @@ export const getNodeModalDetail = (treeData, mapData) => {
         // 如果rootData是对象，直接通过feature_path查找
         if (rootData[node.feature_path]) {
           node.metaData = rootData[node.feature_path];
-          console.log(`为节点 ${node.name} 找到对象数据:`, rootData[node.feature_path]);
+          // console.log(`为节点 ${node.name} 找到对象数据:`, rootData[node.feature_path]);
         }
       }
     } else {

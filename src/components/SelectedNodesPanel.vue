@@ -20,11 +20,29 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(["removeSelectedNode"]);
+const emit = defineEmits([
+  "removeSelectedNode",
+  "clearAllSelectedNodes",
+  "handleSelectedNodeClick",
+  "handleCurrNodePlusClick",
+]);
 
-const removeSelectedNode = (featurePath) => {
+const removeSelectedNode = (idx) => {
   console.log(props.selectedNodeList);
-  emit("removeSelectedNode", featurePath);
+  emit("removeSelectedNode", idx);
+};
+
+const clearAllSelectedNodes = () => {
+  emit("clearAllSelectedNodes");
+  searchValue.value = "";
+};
+
+const handleSelectedNodeClick = (idx) => {
+  emit("handleSelectedNodeClick", idx);
+};
+
+const handleCurrNodePlusClick = (node) => {
+  emit("handleCurrNodePlusClick", node);
 };
 
 const searchValue = ref("");
@@ -38,7 +56,7 @@ function setNodeItemRef(el, index) {
 }
 
 // 处理节点搜索
-function handleNodeSearch(selectedIndex) {
+const handleNodeSearch = (selectedIndex) => {
   if (selectedIndex !== null && selectedIndex !== undefined) {
     nextTick(() => {
       const targetElement = nodeItemRefs.value[selectedIndex];
@@ -60,7 +78,11 @@ function handleNodeSearch(selectedIndex) {
       }
     });
   }
-}
+};
+
+defineExpose({
+  handleNodeSearch,
+});
 </script>
 <template>
   <div>
@@ -79,16 +101,33 @@ function handleNodeSearch(selectedIndex) {
             "
           >
             <div class="node-header">
-              <h3 class="node-title" style="padding-right: 0;">
+              <h3 class="node-title" style="margin-right: 12px">
                 <span style="color: #2b7ce9">CurrNode: &nbsp;</span>
                 {{
-                  currNode && currNode.metaData
-                    ? currNode.originalName
+                  currNode &&
+                  typeof currNode === "object" &&
+                  Object.keys(currNode).length > 0
+                    ? currNode.hasAbbr
                       ? currNode.originalName + " (" + currNode.name + ")"
                       : currNode.metaData.node
                     : "节点信息"
                 }}
               </h3>
+              <div
+                class="plus-button"
+                v-if="
+                  currNode &&
+                  typeof currNode === 'object' &&
+                  Object.keys(currNode).length > 0
+                "
+                @click="handleCurrNodePlusClick(currNode)"
+              >
+                <span class="icon">{{
+                  selectedNodeList.some((node) => node.idx === currNode.idx)
+                    ? "-"
+                    : "+"
+                }}</span>
+              </div>
             </div>
             <div class="node-body">
               <nodeDetailComponent
@@ -108,7 +147,14 @@ function handleNodeSearch(selectedIndex) {
           "
         >
           <h4 style="margin: 0 0 1em">
-            已选择的节点 ({{ selectedNodeList.length }})
+            Added Nodes ({{ selectedNodeList.length }})
+
+            <el-button
+              size="small"
+              style="float: right"
+              @click="clearAllSelectedNodes"
+              >Clear All</el-button
+            >
           </h4>
           <el-select
             v-model="searchValue"
@@ -141,18 +187,19 @@ function handleNodeSearch(selectedIndex) {
                 }"
               >
                 <h3
+                  @click="handleSelectedNodeClick(currNode.idx)"
                   class="node-title"
                   :style="{ color: currNode.selectedColor }"
                 >
                   {{
-                    currNode.originalName
+                    currNode.hasAbbr
                       ? currNode.originalName + " (" + currNode.name + ")"
                       : currNode.metaData.node
                   }}
                 </h3>
                 <button
                   class="close-btn"
-                  @click="removeSelectedNode(currNode.feature_path)"
+                  @click="removeSelectedNode(currNode.idx)"
                 >
                   &times;
                 </button>
@@ -235,11 +282,15 @@ function handleNodeSearch(selectedIndex) {
   }
 
   .node-header {
+    position: relative;
     background: #f5f5f5;
     padding: 15px;
     border-bottom: 1px solid #ddd;
     border-radius: 6px 6px 0 0;
     position: relative;
+    h3 {
+      cursor: pointer;
+    }
   }
 
   .node-title {
@@ -297,5 +348,51 @@ function handleNodeSearch(selectedIndex) {
       box-shadow: inset 0 0 0 1px #000 !important  ;
     }
   }
+}
+
+/* 加号按钮样式 */
+.plus-button {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  top: 25px;
+  right: -5px;
+  background-color: #409eff;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+  user-select: none;
+  transform: translate(-50%, -50%);
+  span {
+    line-height: 1;
+    transform: translateY(-1px);
+  }
+}
+
+.plus-button:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* 加号按钮hover效果 */
+.plus-button:hover[style*="background-color: rgb(64, 158, 255)"] {
+  background-color: #66b1ff !important;
+}
+
+/* 减号按钮hover效果 */
+.plus-button:hover[style*="background-color: rgb(245, 108, 108)"] {
+  background-color: #f78989 !important;
+}
+
+/* 禁用状态按钮hover效果 */
+.plus-button:hover[style*="background-color: rgb(144, 147, 153)"] {
+  background-color: #a6a9ad !important;
 }
 </style>

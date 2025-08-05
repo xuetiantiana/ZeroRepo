@@ -4,12 +4,16 @@
     <div style="height: 100vh">
       <div id="viewport" style="display: flex">
         <selected-nodes-panel
+          ref="selectedNodesPanelRef"
           style="width: 20%; min-width: 300px; max-width: 600px"
           :selectedNodeList="selectedNodeList"
           :maxSelectedNodes="maxSelectedNodes"
           :currNode="currNode"
           @removeSelectedNode="removeSelectedNode"
+          @clearAllSelectedNodes="clearAllSelectedNodes"
           @updateMaxNodes="updateMaxNodes"
+          @handleSelectedNodeClick="handleSelectedNodeClick"
+          @handleCurrNodePlusClick="handleCurrNodePlusClick"
         ></selected-nodes-panel>
         <div id="wrapper" style="flex: 1; overflow: hidden; height: 100%">
           <div id="echart" style="width: 100%; height: 100%"></div>
@@ -25,7 +29,7 @@
 
           <div
             class="showAllNodes"
-            style="position: absolute; right: 20px; top: 5px"
+            style="position: absolute; right: 20px; top: 5px; z-index: 1000;"
           >
             <el-button
               style="width: 120px"
@@ -37,11 +41,11 @@
               }}</el-button
             >
           </div>
-          <div style="position: absolute; right: 150px; top: 5px">
+          <div style="position: absolute; right: 150px; top: 5px; z-index: 1000;">
             <el-button
+              class="center-view-btn"
               style="width: 120px"
               color="rgb(43, 124, 233)"
-              type="primary"
               @click="centerEchart"
             >
               Center View</el-button
@@ -61,6 +65,8 @@ import SelectedNodesPanel from "@/components/SelectedNodesPanel.vue";
 
 // 正确引入 ECharts
 import * as echarts from "echarts";
+
+const selectedNodesPanelRef = ref();
 
 let treeRoot = null; // 保存完整树结构
 let graphData = { nodes: [], links: [] }; // Graph 数据结构
@@ -281,7 +287,7 @@ const getItemStyle = (level, node) => {
     };
   } else {
     let shadow = false;
-    if (currNode.value && currNode.value.id2 == node.id) {
+    if (currNode.value && currNode.value.idx == node.idx) {
       shadow = true;
     }
     return {
@@ -500,7 +506,7 @@ const convertTreeToGraph = (treeData) => {
     const nodeId =
       level <= 1
         ? level + "_" + (node.feature_path || node.name)
-        : level + "_" + node.id + "_" + (node.feature_path || node.name);
+        : level + "_" + (node.feature_path || node.name) + "_" + node.idx;
 
     // 根据level获取当前节点应该的径向距离
     const currentRadius = getRadiusForLevel(level);
@@ -523,9 +529,10 @@ const convertTreeToGraph = (treeData) => {
     // 传递label文本和半径给
     const graphNode = {
       id: nodeId,
-      id2: node.id,
+      idx: node.idx,
       name: node.name || "Unknown",
       originalName: node.originalName ? node.originalName : null,
+      hasAbbr: node.hasAbbr,
       feature_path: node.feature_path || "",
       level: level,
       metaData: node.metaData,
@@ -633,9 +640,9 @@ const updateVisibleNodes = (level_show) => {
 };
 
 // 新增：切换某节点的子节点显示/隐藏
-const toggleChildrenVisibility = (featurePath) => {
+const toggleChildrenVisibility = (idx) => {
   function findNode(node, path) {
-    if (node.feature_path === path) return node;
+    if (node.idx === path) return node;
     if (node.children) {
       for (const child of node.children) {
         const found = findNode(child, path);
@@ -644,7 +651,7 @@ const toggleChildrenVisibility = (featurePath) => {
     }
     return null;
   }
-  const node = findNode(treeRoot, featurePath);
+  const node = findNode(treeRoot, idx);
   let wasCollapsed = false;
   if (node && node.children) {
     // 判断是否有隐藏的子节点（即即将展开）
@@ -690,7 +697,7 @@ const initGraphChart = (myChart) => {
         if (params.dataType === "node") {
           const nodeData = params.data;
           let content = `<strong>Node: </strong>${
-            nodeData.originalName
+            nodeData.hasAbbr
               ? nodeData.originalName + " (" + nodeData.name + ")"
               : nodeData.name
           } <br/>`;
@@ -783,10 +790,14 @@ const initGraphChart = (myChart) => {
         },
 
         // emphasis: {
-        //   focus: "adjacency",
-        //   lineStyle: {
-        //     width: 3,
+        //   // focus: "adjacency",
+        //   itemStyle: {
+        //     color: '#ff0000'
         //   },
+        //   label: {
+        //     show: true,
+        //     fontWeight: 'bold'
+        //   }
         // },
 
         animationDurationUpdate: 750,
@@ -819,18 +830,18 @@ const initGraphChart = (myChart) => {
     ) {
       // console.log('鼠标进入了节点（或节点label）:', params.name);
 
-      const currentNodePath = params.data.feature_path;
+      const currentNodeIdx = params.data.idx;
 
       // 清除任何待执行的隐藏操作
       clearTimeout(hideTimeout);
 
       // 如果是同一个节点（包括从节点到标签的移动），不需要重新显示加号
-      if (lastHoverNodePath === currentNodePath) {
+      if (lastHoverNodeIdx === currentNodeIdx) {
         return;
       }
 
       // 更新最后hover的节点路径
-      lastHoverNodePath = currentNodePath;
+      lastHoverNodeIdx = currentNodeIdx;
 
       showPlusButton(params.data);
     }
@@ -845,10 +856,10 @@ const initGraphChart = (myChart) => {
     ) {
       // console.log('鼠标移出了节点:', params.name);
 
-      const currentNodePath = params.data.feature_path;
+      const currentNodeIdx = params.data.idx;
 
       // 只有当前hover的节点才处理mouseout事件
-      if (lastHoverNodePath !== currentNodePath) {
+      if (lastHoverNodeIdx !== currentNodeIdx) {
         return;
       }
 
@@ -857,9 +868,9 @@ const initGraphChart = (myChart) => {
       // 延迟隐藏，给用户时间移动到加号上
       hideTimeout = setTimeout(() => {
         // 再次检查是否还在同一个节点上（防止快速移动导致的问题）
-        if (lastHoverNodePath === currentNodePath && !isMouseOverPlusButton()) {
+        if (lastHoverNodeIdx === currentNodeIdx && !isMouseOverPlusButton()) {
           hidePlusButton();
-          lastHoverNodePath = null; // 重置路径
+          lastHoverNodeIdx = null; // 重置路径
         }
       }, 200); // 适中的延迟时间
     }
@@ -973,8 +984,8 @@ const initGraphChart = (myChart) => {
         currNode.value = null;
       }
 
-      const featurePath = params.data.feature_path;
-      toggleChildrenVisibility(featurePath);
+      const idx = params.data.idx;
+      toggleChildrenVisibility(idx);
       graphData = convertTreeToGraph(treeRoot);
       myChart.setOption({
         series: [{ data: graphData.nodes, links: graphData.links }],
@@ -982,6 +993,131 @@ const initGraphChart = (myChart) => {
       centerViewToNode(params.data);
     }
   });
+};
+
+// 添加点击 selectedNodeList 项的逻辑
+const focusOrExpandNode = (idx) => {
+  // 检查节点是否在当前可见的 ECharts 图表中
+  console.log(graphData.nodes);
+  const node = graphData.nodes.find((n) => n.idx === idx);
+  console.log("!!!", idx, node);
+  if (node) {
+    const index = graphData.nodes.findIndex((n) => n.idx === idx);
+    graphData.nodes[index].emphasis = {
+      itemStyle: {
+        color: "rgb(43, 124, 233)",
+      },
+      label: {
+        fontWeight: "bold",
+        color: "#000",
+      },
+    };
+    // 如果节点存在，聚焦到该节点
+    myChart.setOption({
+      series: [
+        {
+          center: [node.x, node.y],
+          data: graphData.nodes,
+        },
+      ],
+    });
+
+    // centerViewToNode(node)
+
+    myChart.dispatchAction({
+      type: "highlight",
+      seriesIndex: 0,
+      dataIndex: index,
+    });
+    // 2 秒后取消高亮
+    setTimeout(() => {
+      myChart.dispatchAction({
+        type: "downplay",
+        seriesIndex: 0,
+        dataIndex: index,
+      });
+      // 删除 emphasis 属性
+      delete graphData.nodes[index].emphasis;
+
+      // 再次 setOption，恢复默认状态
+      myChart.setOption({
+        series: [
+          {
+            data: graphData.nodes,
+          },
+        ],
+      });
+    }, 2000);
+
+    console.log(`聚焦到节点: ${idx}`);
+  } else {
+    // 如果节点不存在，逐层展开并查找
+    console.log(`节点 ${idx} 不在当前视图中，开始逐层展开`);
+    expandAndFocusNode(idx);
+  }
+};
+
+// 修改 expandAndFocusNode 函数，确保在 treeRoot 中查找节点并展开其祖先节点及兄弟节点
+const expandAndFocusNode = (idx) => {
+  let found = false;
+
+  const findNodeAndExpandBranch = (node, targetIdx) => {
+    if (!node) return false;
+
+    // 如果找到目标节点
+    if (node.idx === targetIdx) {
+      node.visible = true;
+      return true;
+    }
+
+    // 遍历子节点
+    if (node.children && node.children.length > 0) {
+      for (const child of node.children) {
+        if (findNodeAndExpandBranch(child, targetIdx)) {
+          // 如果子节点中找到目标节点，设置当前节点及其所有子节点为可见
+          node.visible = true;
+          node.children.forEach((sibling) => {
+            sibling.visible = true; // 展开兄弟节点
+          });
+          return true;
+        }
+      }
+    }
+
+    return false;
+  };
+
+  const expandLayer = () => {
+    if (found) return;
+
+    // 在 treeRoot 中查找目标节点并展开其祖先节点及兄弟节点
+    found = findNodeAndExpandBranch(treeRoot, idx);
+
+    if (found) {
+      // 如果找到目标节点，更新图表数据并聚焦
+      graphData = convertTreeToGraph(treeRoot); // 更新图表数据
+      myChart.setOption({
+        series: [
+          {
+            data: graphData.nodes,
+            links: graphData.links,
+          },
+        ],
+      });
+      focusOrExpandNode(idx); // 聚焦到目标节点
+    } else {
+      // 如果还未找到，继续展开
+      // setTimeout(expandLayer, 500); // 延迟展开，避免阻塞
+    }
+  };
+
+  expandLayer();
+};
+
+// 监听 selectedNodeList 点击事件
+const handleSelectedNodeClick = (idx) => {
+  console.log("22", idx);
+  focusOrExpandNode(idx);
 };
 
 const calculateOffsetAndResetGraphPosition = () => {
@@ -1059,6 +1195,7 @@ const centerEchart = () => {
     series: [
       {
         center: [0, 0],
+        data: graphData.nodes,
       },
     ],
   });
@@ -1070,7 +1207,7 @@ const centerEchart = () => {
         },
       ],
     });
-  }, 100);
+  }, 150);
 };
 
 // 新增：自动居中视图到点击节点
@@ -1137,24 +1274,36 @@ function centerViewToNode(node) {
 }
 
 // 加号逻辑
+const handleCurrNodePlusClick = (currNode) => {
+  const isSelected = selectedNodeList.value.some(
+    (node) => node.idx === currNode.idx
+  );
+  if (isSelected) {
+    selectedNodeList.value = selectedNodeList.value.filter(
+      (node) => node.idx !== currNode.idx
+    );
+  } else {
+    selectedNodeList.value.unshift(currNode);
+    selectedNodesPanelRef.value.handleNodeSearch(0);
+  }
+};
+
 // 处理加号/减号按钮点击
 const handlePlusClick = () => {
   if (currentHoverNode && currentHoverNode.level <= 1) {
     return;
   }
   if (currentHoverNode) {
-    const featurePath = currentHoverNode.feature_path;
+    const idx = currentHoverNode.idx;
 
     // 检查节点是否已经在选择列表中
-    const isSelected = selectedNodeList.value.some(
-      (node) => node.feature_path === featurePath
-    );
+    const isSelected = selectedNodeList.value.some((node) => node.idx === idx);
 
     if (isSelected) {
       // 如果已选择，从列表中移除
       console.log("点击减号，移除节点:", currentHoverNode);
       selectedNodeList.value = selectedNodeList.value.filter(
-        (node) => node.feature_path !== featurePath
+        (node) => node.idx !== idx
       );
     } else {
       // 检查是否超过最大选择数量
@@ -1166,6 +1315,7 @@ const handlePlusClick = () => {
       // 如果未选择且未超过限制，添加到列表中
       console.log("点击加号，添加节点:", currentHoverNode);
       selectedNodeList.value.unshift(currentHoverNode);
+      selectedNodesPanelRef.value.handleNodeSearch(0);
       console.log("!!!!", selectedNodeList);
     }
 
@@ -1183,7 +1333,7 @@ const showPlusButton = (nodeData) => {
   try {
     // 检查节点是否已经在选择列表中
     const isSelected = selectedNodeList.value.some(
-      (node) => node.feature_path === nodeData.feature_path
+      (node) => node.idx === nodeData.idx
     );
 
     // 将节点的逻辑坐标转换为像素坐标
@@ -1245,7 +1395,7 @@ const hidePlusButton = () => {
     plusButton.style.display = "none";
   }
   currentHoverNode = null;
-  lastHoverNodePath = null; // 重置路径
+  lastHoverNodeIdx = null; // 重置路径
 };
 
 // 检查鼠标是否在加号按钮上
@@ -1256,18 +1406,20 @@ const isMouseOverPlusButton = () => {
 
 // 检查节点是否已选择
 const isNodeSelected = (nodeData) => {
-  return selectedNodeList.value.some(
-    (node) => node.feature_path === nodeData.feature_path
-  );
+  return selectedNodeList.value.some((node) => node.idx === nodeData.idx);
 };
 
 // 从选择列表中移除节点
-const removeSelectedNode = (featurePath) => {
+const removeSelectedNode = (idx) => {
   selectedNodeList.value = selectedNodeList.value.filter(
-    (node) => node.feature_path !== featurePath
+    (node) => node.idx !== idx
   );
-  console.log("移除节点:", featurePath);
+  console.log("移除节点:", idx);
   console.log("当前选择的节点列表:", selectedNodeList.value);
+};
+
+const clearAllSelectedNodes = () => {
+  selectedNodeList.value = [];
 };
 
 // 更新最大选择节点数量（从组件传来的事件）
@@ -1297,7 +1449,7 @@ const setupPlusButtonEvents = () => {
 
 // 用于管理隐藏延迟的变量
 let hideTimeout = null;
-let lastHoverNodePath = null; // 记录最后hover的节点路径
+let lastHoverNodeIdx = null; // 记录最后hover的节点路径
 </script>
 
 <style scoped lang="scss">
@@ -1430,5 +1582,13 @@ let lastHoverNodePath = null; // 记录最后hover的节点路径
 
 #wrapper {
   position: relative;
+}
+.center-view-btn {
+  background: #fff;
+  color: rgb(43, 124, 233);
+  border: 1px solid rgb(43, 124, 233);
+  &:hover {
+    opacity: 0.8;
+  }
 }
 </style>
