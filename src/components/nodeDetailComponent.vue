@@ -33,7 +33,7 @@ const isDocstringExpanded = (key: string) => {
       <span class="info-value">{{ currNode.metaData.node }}</span>
     </div>
     <div class="info-item">
-      <span class="info-label">Feature Path:</span>
+      <span class="info-label">Feature_Path:</span>
       <span class="info-value">{{ currNode.metaData.feature_path }}</span>
     </div>
     <div
@@ -127,12 +127,10 @@ const isDocstringExpanded = (key: string) => {
 
     .info-label {
       font-weight: bold;
-      color: #555;
     }
 
     .info-value {
       margin-left: 10px;
-      color: #333;
     }
   }
 
@@ -156,7 +154,7 @@ const isDocstringExpanded = (key: string) => {
       -webkit-line-clamp: unset;
       overflow: visible;
       &:hover {
-        color: #000;
+        // color: #000;
       }
     }
   }

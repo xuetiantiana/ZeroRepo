@@ -29,7 +29,7 @@
 
           <div
             class="showAllNodes"
-            style="position: absolute; right: 20px; top: 5px; z-index: 1000;"
+            style="position: absolute; right: 20px; top: 15px; z-index: 1000;"
           >
             <el-button
               style="width: 120px"
@@ -41,7 +41,7 @@
               }}</el-button
             >
           </div>
-          <div style="position: absolute; right: 150px; top: 5px; z-index: 1000;">
+          <div style="position: absolute; right: 150px; top: 15px; z-index: 1000;">
             <el-button
               class="center-view-btn"
               style="width: 120px"
@@ -295,7 +295,7 @@ const getItemStyle = (level, node) => {
       borderColor: ringColors[level % ringColors.length],
       borderWidth: 0.5,
       // opacity: 1,
-      shadowColor: shadow ? "rgb(43, 124, 233)" : "transparent",
+      shadowColor: shadow ? "#0068B8" : "transparent",
       shadowBlur: 20,
     };
   }

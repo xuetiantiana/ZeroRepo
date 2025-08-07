@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { ref, computed, watch, defineProps, nextTick, defineExpose } from "vue";
 import nodeDetailComponent from "@/components/nodeDetailComponent.vue";
+import { Close } from "@element-plus/icons-vue";
 
 const props = defineProps({
   selectedNodeList: {
@@ -93,16 +94,10 @@ defineExpose({
 
       <div class="sidebar-content">
         <div class="current-node-box" ref="nodeModalRef">
-          <div
-            class="select-node-item"
-            style="
-              border: 2px solid #2b7ce9;
-              box-shadow: 0 8px 24px rgba(43, 124, 233, 0.4);
-            "
-          >
+          <div class="select-node-item" style="">
             <div class="node-header">
               <h3 class="node-title" style="margin-right: 12px">
-                <span style="color: #2b7ce9">CurrNode: &nbsp;</span>
+                <span>CurrNode: &nbsp;</span>
                 {{
                   currNode &&
                   typeof currNode === "object" &&
@@ -110,7 +105,7 @@ defineExpose({
                     ? currNode.hasAbbr
                       ? currNode.originalName + " (" + currNode.name + ")"
                       : currNode.metaData.node
-                    : "节点信息"
+                    : "None"
                 }}
               </h3>
               <div
@@ -141,75 +136,85 @@ defineExpose({
 
         <div
           style="
-            padding: 1em 1em 0;
-            border-top: 1px solid #aaa;
-            margin-top: 1em;
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            overflow: hidden;
+            padding: 1em 0.5em 0 1em;
+            margin: 1em 0.5em;
+            border-radius: 15px;
+            background: rgba(212, 212, 212, 0.1);
           "
         >
-          <h4 style="margin: 0 0 1em">
-            Added Nodes ({{ selectedNodeList.length }})
+          <div style="">
+            <h4 style="margin: 0 0 1em; padding-right: 7px; font-size: 18px">
+              Added Nodes ({{ selectedNodeList.length }})
 
-            <el-button
-              size="small"
-              style="float: right"
-              @click="clearAllSelectedNodes"
-              >Clear All</el-button
-            >
-          </h4>
-          <el-select
-            v-model="searchValue"
-            filterable
-            placeholder="Type to search yours added nodes below..."
-            clearable
-            style="width: 100%"
-            @change="handleNodeSearch"
-          >
-            <el-option
-              v-for="(item, index) in selectedNodeList"
-              :key="item.id"
-              :label="item.metaData?.node || item.label"
-              :value="index"
-            />
-          </el-select>
-        </div>
-        <div class="selected-nodes-box">
-          <div ref="selectedNodesScrollContainer" class="selected-nodes-list">
-            <div
-              v-for="(currNode, index) in selectedNodeList"
-              :key="index"
-              :ref="(el) => setNodeItemRef(el, index)"
-              class="select-node-item"
-            >
-              <div
-                class="node-header"
-                :style="{
-                  'border-left': `4px solid ${currNode.selectedColor}`,
-                }"
+              <el-button
+                class="clear-all-btn"
+                size="small"
+                style="float: right"
+                @click="clearAllSelectedNodes"
+                >Clear All</el-button
               >
-                <h3
-                  @click="handleSelectedNodeClick(currNode.idx)"
-                  class="node-title"
-                  :style="{ color: currNode.selectedColor }"
+            </h4>
+            <div style="margin-right: 7px; margin-bottom: 6px">
+              <el-select
+                v-model="searchValue"
+                filterable
+                placeholder="Type to search yours added nodes below..."
+                clearable
+                style="width: 100%"
+                @change="handleNodeSearch"
+              >
+                <el-option
+                  v-for="(item, index) in selectedNodeList"
+                  :key="item.id"
+                  :label="item.metaData?.node || item.label"
+                  :value="index"
+                />
+              </el-select>
+            </div>
+          </div>
+          <div class="selected-nodes-box">
+            <div ref="selectedNodesScrollContainer" class="selected-nodes-list">
+              <div
+                v-for="(currNode, index) in selectedNodeList"
+                :key="index"
+                :ref="(el) => setNodeItemRef(el, index)"
+                class="select-node-item"
+              >
+                <div
+                  class="node-header"
+                  :style="{
+                    'border-left': `4px solid ${currNode.selectedColor}`,
+                  }"
                 >
-                  {{
-                    currNode.hasAbbr
-                      ? currNode.originalName + " (" + currNode.name + ")"
-                      : currNode.metaData.node
-                  }}
-                </h3>
-                <button
-                  class="close-btn"
-                  @click="removeSelectedNode(currNode.idx)"
-                >
-                  &times;
-                </button>
-              </div>
-              <div class="node-body">
-                <nodeDetailComponent
-                  v-if="currNode && currNode.metaData"
-                  :currNode="currNode"
-                >
-                </nodeDetailComponent>
+                  <h3
+                    @click="handleSelectedNodeClick(currNode.idx)"
+                    class="node-title"
+                    :style="{ color: currNode.selectedColor }"
+                  >
+                    {{
+                      currNode.hasAbbr
+                        ? currNode.originalName + " (" + currNode.name + ")"
+                        : currNode.metaData.node
+                    }}
+                  </h3>
+                  <button
+                    class="close-btn"
+                    @click="removeSelectedNode(currNode.idx)"
+                  >
+                    <el-icon><Close /></el-icon>
+                  </button>
+                </div>
+                <div class="node-body">
+                  <nodeDetailComponent
+                    v-if="currNode && currNode.metaData"
+                    :currNode="currNode"
+                  >
+                  </nodeDetailComponent>
+                </div>
               </div>
             </div>
           </div>
@@ -225,7 +230,7 @@ defineExpose({
   font-size: 14px;
   height: 100%;
   width: 100%;
-  background: #f8f9fa;
+  background: #fff;
   border-right: 2px solid #dee2e6;
   overflow: hidden;
   padding: 0;
@@ -237,8 +242,17 @@ defineExpose({
     display: flex;
     flex-direction: row;
     justify-content: space-between;
-    padding: 0.8em 1em;
-    border-bottom: 4px solid #dee2e6;
+    padding: 14px 30px;
+    h2 {
+      color: rgba(255, 255, 255, 1);
+      font-family: Segoe UI;
+      font-weight: 900;
+      font-style: Italic;
+      font-size: 24px;
+      line-height: 32px;
+      -webkit-text-stroke: 2px #0f6cbd;
+      text-stroke: 2px #0f6cbd;
+    }
   }
   .sidebar-content {
     flex: 1;
@@ -247,15 +261,28 @@ defineExpose({
     flex-direction: column;
     .current-node-box {
       min-height: 200px;
-      padding: 1em;
+      padding: 1em 0.5em 2em;
+      margin: 0 0.5em;
+      border-bottom: 1px solid rgba(97, 97, 97, 1);
+      .select-node-item {
+        background: rgba(0, 120, 212, 1);
+        color: #fff;
+        border-radius: 15px;
+        .node-header h3::after {
+          opacity: 0;
+        }
+        .node-header h3 {
+          font-size: 18px;
+        }
+      }
     }
     .selected-nodes-box {
       padding: 1em 0;
       flex: 1;
       overflow: hidden;
       & > div {
-        padding: 0 1em;
         height: 100%;
+        padding-right: 0.5em;
         overflow-y: auto;
       }
     }
@@ -266,9 +293,7 @@ defineExpose({
 .select-node-item {
   width: 100%;
   background: white;
-  border: 2px solid #ccc;
-  border-radius: 8px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  border-top: 3px solid rgba(16, 110, 190, 1);
   transition: opacity 0.3s ease-in-out;
   margin-top: 1em;
   &:nth-child(1) {
@@ -283,28 +308,36 @@ defineExpose({
 
   .node-header {
     position: relative;
-    background: #f5f5f5;
     padding: 15px;
-    border-bottom: 1px solid #ddd;
     border-radius: 6px 6px 0 0;
     position: relative;
     h3 {
       cursor: pointer;
+      position: relative;
+      &::after {
+        content: " ";
+        display: inline-block;
+        width: 3px;
+        height: 1.6em;
+        position: absolute;
+        left: -10px;
+        top: -2px;
+        background: rgba(70, 54, 104, 1);
+      }
     }
   }
 
   .node-title {
     margin: 0;
     font-weight: bold;
-    color: #333;
-    font-size: 1.1em;
+    font-size: 16px;
     padding-right: 1em;
   }
 
   .close-btn {
     position: absolute;
-    right: 5px;
-    top: 10px;
+    right: 2px;
+    top: 12px;
     background: none;
     border: none;
     font-size: 20px;
@@ -316,15 +349,28 @@ defineExpose({
   }
 
   .close-btn:hover {
-    background: #e0e0e0;
-    color: #000;
+    // background: #e0e0e0;
+    // color: #000;
+    opacity: 0.8;
   }
 
   .node-body {
-    padding: 15px;
+    padding: 0px 15px 15px;
     max-height: 200px;
     min-height: 100px;
     overflow-y: auto;
+  }
+}
+
+.clear-all-btn {
+  background: #fff;
+  color: rgb(43, 124, 233);
+  border: 1px solid rgb(43, 124, 233);
+  height: 30px;
+  font-size: 14px;
+  border-radius: 8px;
+  &:hover {
+    opacity: 0.8;
   }
 }
 
@@ -350,20 +396,33 @@ defineExpose({
   }
 }
 
+:deep(.el-select) {
+  --el-fill-color-blank: rgba(230, 230, 230, 1);
+  --el-border-radius-base: 12px;
+  --el-input-text-color: rgba(66, 66, 66, 1);
+  .el-select__wrapper {
+    height: 36px;
+    border: none;
+    outline: none;
+    box-shadow: none;
+  }
+}
+
 /* 加号按钮样式 */
 .plus-button {
   position: absolute;
   width: 20px;
   height: 20px;
   top: 25px;
-  right: -5px;
-  background-color: #409eff;
+  right: 0px;
+  // background-color: #409eff;
+  border: 2px solid #fff;
   color: white;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: bold;
   cursor: pointer;
   z-index: 1000;
