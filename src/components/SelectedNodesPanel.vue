@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { ref, computed, watch, defineProps, nextTick, defineExpose } from "vue";
 import nodeDetailComponent from "@/components/nodeDetailComponent.vue";
-import { Close } from "@element-plus/icons-vue";
+import { Close, ArrowDown } from "@element-plus/icons-vue";
 
 const props = defineProps({
   selectedNodeList: {
@@ -29,11 +29,12 @@ const emit = defineEmits([
 ]);
 
 const removeSelectedNode = (idx) => {
-  console.log(props.selectedNodeList);
+  expandedNodeIds.value.delete(idx); // 删除展开状态
   emit("removeSelectedNode", idx);
 };
 
 const clearAllSelectedNodes = () => {
+  expandedNodeIds.value.clear(); // 清空所有展开状态
   emit("clearAllSelectedNodes");
   searchValue.value = "";
 };
@@ -81,6 +82,15 @@ const handleNodeSearch = (selectedIndex) => {
   }
 };
 
+const expandedNodeIds = ref(new Set());
+function toggleNodeBody(nodeId) {
+  if (expandedNodeIds.value.has(nodeId)) {
+    expandedNodeIds.value.delete(nodeId);
+  } else {
+    expandedNodeIds.value.add(nodeId);
+  }
+}
+
 defineExpose({
   handleNodeSearch,
 });
@@ -91,7 +101,6 @@ defineExpose({
       <div class="sidebar-header">
         <h2>ZeroRepo</h2>
       </div>
-
       <div class="sidebar-content">
         <div class="current-node-box" ref="nodeModalRef">
           <div class="select-node-item" style="">
@@ -133,7 +142,6 @@ defineExpose({
             </div>
           </div>
         </div>
-
         <div
           style="
             display: flex;
@@ -180,7 +188,7 @@ defineExpose({
             <div ref="selectedNodesScrollContainer" class="selected-nodes-list">
               <div
                 v-for="(currNode, index) in selectedNodeList"
-                :key="index"
+                :key="currNode.idx || index"
                 :ref="(el) => setNodeItemRef(el, index)"
                 class="select-node-item"
               >
@@ -208,12 +216,29 @@ defineExpose({
                     <el-icon><Close /></el-icon>
                   </button>
                 </div>
-                <div class="node-body">
+                <div
+                  class="node-body"
+                  :class="{ expanded: expandedNodeIds.has(currNode.idx) }"
+                >
+                  <button
+                    class="dropdown-btn"
+                    @click="toggleNodeBody(currNode.idx)"
+                    style="position: absolute; right: 2px; top: 0px; z-index: 2"
+                  >
+                    <!-- {{ expandedNodeIds.has(currNode.idx) ? '收起' : '显示全部' }} -->
+                    <el-icon
+                      :style="{
+                        transform: expandedNodeIds.has(currNode.idx)
+                          ? 'rotate(180deg)'
+                          : 'rotate(0deg)',
+                      }"
+                      ><ArrowDown
+                    /></el-icon>
+                  </button>
                   <nodeDetailComponent
                     v-if="currNode && currNode.metaData"
                     :currNode="currNode"
-                  >
-                  </nodeDetailComponent>
+                  />
                 </div>
               </div>
             </div>
@@ -260,7 +285,6 @@ defineExpose({
     display: flex;
     flex-direction: column;
     .current-node-box {
-      min-height: 200px;
       padding: 1em 0.5em 2em;
       margin: 0 0.5em;
       border-bottom: 1px solid rgba(97, 97, 97, 1);
@@ -273,6 +297,11 @@ defineExpose({
         }
         .node-header h3 {
           font-size: 18px;
+        }
+        .node-body {
+          min-height: 100px;
+          max-height: 150px;
+          overflow: auto;
         }
       }
     }
@@ -295,7 +324,8 @@ defineExpose({
   background: white;
   border-top: 3px solid rgba(16, 110, 190, 1);
   transition: opacity 0.3s ease-in-out;
-  margin-top: 1em;
+  margin-top: 0.5em;
+  padding-bottom: 1em;
   &:nth-child(1) {
     margin-top: 0;
   }
@@ -336,15 +366,15 @@ defineExpose({
 
   .close-btn {
     position: absolute;
-    right: 2px;
-    top: 12px;
+    right: -2px;
+    top: 14px;
     background: none;
     border: none;
-    font-size: 20px;
+    font-size: 18px;
     cursor: pointer;
     color: #666;
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
     border-radius: 15px;
   }
 
@@ -355,10 +385,11 @@ defineExpose({
   }
 
   .node-body {
-    padding: 0px 15px 15px;
-    max-height: 200px;
-    min-height: 100px;
-    overflow-y: auto;
+    padding: 0px 15px 0;
+    overflow: hidden;
+    // max-height: 200px;
+    // min-height: 100px;
+    // overflow-y: auto;
   }
 }
 
@@ -453,5 +484,25 @@ defineExpose({
 /* 禁用状态按钮hover效果 */
 .plus-button:hover[style*="background-color: rgb(144, 147, 153)"] {
   background-color: #a6a9ad !important;
+}
+
+.node-body {
+  min-height: 100px;
+  max-height: 120px;
+  overflow-y: hidden;
+  position: relative;
+  transition: max-height 0.3s;
+}
+.node-body.expanded {
+  max-height: none;
+  overflow-y: visible;
+}
+.dropdown-btn {
+  background: #eee;
+  border: none;
+  border-radius: 4px;
+  padding: 2px 5px;
+  cursor: pointer;
+  font-size: 12px;
 }
 </style>

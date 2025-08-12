@@ -29,7 +29,7 @@
 
           <div
             class="showAllNodes"
-            style="position: absolute; right: 20px; top: 15px; z-index: 1000;"
+            style="position: absolute; right: 20px; top: 15px; z-index: 1000"
           >
             <el-button
               style="width: 120px"
@@ -41,7 +41,9 @@
               }}</el-button
             >
           </div>
-          <div style="position: absolute; right: 150px; top: 15px; z-index: 1000;">
+          <div
+            style="position: absolute; right: 150px; top: 15px; z-index: 1000"
+          >
             <el-button
               class="center-view-btn"
               style="width: 120px"
@@ -291,12 +293,14 @@ const getItemStyle = (level, node) => {
       shadow = true;
     }
     return {
-      color: ringColors[level % ringColors.length],
+      color: shadow
+        ? "rgb(0, 120, 212)"
+        : ringColors[level % ringColors.length],
       borderColor: ringColors[level % ringColors.length],
-      borderWidth: 0.5,
+      borderWidth: 1,
       // opacity: 1,
-      shadowColor: shadow ? "#0068B8" : "transparent",
-      shadowBlur: 20,
+      // shadowColor: shadow ? "#0068B8" : "transparent",
+      // shadowBlur: 20,
     };
   }
 };
@@ -313,6 +317,7 @@ const getLineStyle = (level, node) => {
 };
 
 const getLabelStyle = (
+  node,
   level,
   angle = 0,
   labelText = "",
@@ -333,6 +338,7 @@ const getLabelStyle = (
     );
     const r = getSymbolSize(5);
     const dd = deg > 90 && deg < 270 ? 180 - deg : -deg;
+
     return {
       show: true,
       position: [offite_xy.dx + r, offite_xy.dy + r], // 以节点为锚点
@@ -358,10 +364,18 @@ const getLabelStyle = (
       fontWeight: "normal",
     };
   } else {
+    let shadow = false;
+    if (currNode.value && currNode.value.idx == node.idx) {
+      shadow = true;
+    }
     obj = {
       position: "inside",
       fontSize: level === 1 ? 12 : 11,
-      color: level == 1 ? "#fff" : "#333",
+      color: level == 1 ? "#fff" : shadow ? "#fff" : "#333",
+      textBorderColor: "#000", // 描边颜色
+      textBorderWidth: shadow ? 2 : 0, // 描边宽度
+      textShadowColor: "rgba(0,0,0,0.5)", // 阴影颜色（可选）
+      textShadowBlur: shadow ? 4 : 0, // 阴影模糊度（可选）
       verticalAlign: "middle",
       align: "center",
       fontWeight: level === 1 ? "bold" : "normal",
@@ -545,6 +559,7 @@ const convertTreeToGraph = (treeData) => {
       symbolSize: node.symbolSize || getSymbolSize(level),
       // symbol: "rect",
       label: getLabelStyle(
+        node,
         level,
         currentAngle,
         node.name || "",

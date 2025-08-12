@@ -28,7 +28,7 @@ const isDocstringExpanded = (key: string) => {
 </script>
 <template>
   <div class="body" v-if="currNode && currNode.metaData">
-    <div class="info-item">
+    <div class="info-item" style="padding-right: 15px;">
       <span class="info-label">Node:</span>
       <span class="info-value">{{ currNode.metaData.node }}</span>
     </div>
