@@ -324,6 +324,10 @@ const getLabelStyle = (
   radius = 0,
   pointPosition
 ) => {
+  let shadow = false;
+    if (currNode.value && currNode.value.idx == node.idx) {
+      shadow = true;
+    }
   if (level >= 5) {
     // 让文本始终朝外，旋转角度与节点到圆心的方向一致
     let deg = (angle * 180) / Math.PI;
@@ -343,8 +347,8 @@ const getLabelStyle = (
       show: true,
       position: [offite_xy.dx + r, offite_xy.dy + r], // 以节点为锚点
       fontSize: 10,
-      color: "#333",
-      fontWeight: "normal",
+      color:  shadow ? "#000" : "#333",
+      fontWeight: shadow ? 'bold' : "normal",
       align: "center",
       verticalAlign: "middle",
       rotate: deg > 90 && deg < 270 ? 180 - deg : -deg,
@@ -364,10 +368,7 @@ const getLabelStyle = (
       fontWeight: "normal",
     };
   } else {
-    let shadow = false;
-    if (currNode.value && currNode.value.idx == node.idx) {
-      shadow = true;
-    }
+    
     obj = {
       position: "inside",
       fontSize: level === 1 ? 12 : 11,
