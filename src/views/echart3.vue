@@ -53,6 +53,34 @@
               Center View</el-button
             >
           </div>
+          <div
+            style="position: absolute; right: 280px; top: 15px; z-index: 1000"
+          >
+            <el-button
+              class="center-view-btn"
+              style="width: 120px"
+              color="rgb(43, 124, 233)"
+              @click="exportChart"
+              :disabled="downloadEchartBtnDisabled"
+              :loading="downloadEchartBtnDisabled"
+            >
+              Print View</el-button
+            >
+          </div>
+        </div>
+
+        <div
+          style="
+            width: 2000px;
+            height: 2000px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: -1;
+            opacity: 0;
+          "
+        >
+          <div id="print-echart" style="width: 100%; height: 100%"></div>
         </div>
       </div>
     </div>
@@ -147,8 +175,7 @@ onMounted(() => {
       graphData = convertTreeToGraph(treeRoot); // 只显示可见节点和线
 
       initGraphChart(myChart);
-
-      // 在这里使用 webuiData 和 chartData
+      initPrintEchart();
     })
     .catch((error) => {
       console.error("请求失败:", error);
@@ -260,25 +287,26 @@ const lineColors = {
   "Data Engineering": "#0368FF",
 };
 
-const getSymbolSize = (level) => {
+const getSymbolSize = (isPrint, level) => {
   let size;
+  let scale = isPrint ? 1.5 : scaleNum;
   if (level == 0) {
-    size = 5;
+    size = 1;
   } else if (level == 1) {
-    size = 100 / scaleNum;
+    size = 100 / scale;
   } else if (level == 2) {
-    size = 80 / scaleNum;
+    size = 80 / scale;
   } else if (level == 3) {
-    size = 70 / scaleNum;
+    size = 70 / scale;
   } else if (level == 4) {
-    size = 38 / scaleNum;
+    size = 38 / scale;
   } else {
-    size = 30 / scaleNum;
+    size = isPrint ? 10 : 25 / scale;
   }
   return size;
 };
 
-const getItemStyle = (level, node) => {
+const getItemStyle = (isPrint, level, node) => {
   console.log("!!@@@@", node, currNode.value);
   if (level <= 1) {
     return {
@@ -292,6 +320,7 @@ const getItemStyle = (level, node) => {
     if (currNode.value && currNode.value.idx == node.idx) {
       shadow = true;
     }
+    shadow = isPrint ? false : shadow;
     return {
       color: shadow
         ? "rgb(0, 120, 212)"
@@ -317,6 +346,7 @@ const getLineStyle = (level, node) => {
 };
 
 const getLabelStyle = (
+  isPrint,
   node,
   level,
   angle = 0,
@@ -325,9 +355,11 @@ const getLabelStyle = (
   pointPosition
 ) => {
   let shadow = false;
-    if (currNode.value && currNode.value.idx == node.idx) {
-      shadow = true;
-    }
+  if (currNode.value && currNode.value.idx == node.idx) {
+    shadow = true;
+  }
+  shadow = isPrint ? false : shadow;
+
   if (level >= 5) {
     // 让文本始终朝外，旋转角度与节点到圆心的方向一致
     let deg = (angle * 180) / Math.PI;
@@ -340,15 +372,15 @@ const getLabelStyle = (
       100,
       labelText
     );
-    const r = getSymbolSize(5);
+    const r = getSymbolSize(isPrint, 5);
     const dd = deg > 90 && deg < 270 ? 180 - deg : -deg;
 
     return {
       show: true,
       position: [offite_xy.dx + r, offite_xy.dy + r], // 以节点为锚点
       fontSize: 10,
-      color:  shadow ? "#000" : "#333",
-      fontWeight: shadow ? 'bold' : "normal",
+      color: shadow ? "#000" : "#333",
+      fontWeight: shadow ? "bold" : "normal",
       align: "center",
       verticalAlign: "middle",
       rotate: deg > 90 && deg < 270 ? 180 - deg : -deg,
@@ -368,7 +400,6 @@ const getLabelStyle = (
       fontWeight: "normal",
     };
   } else {
-    
     obj = {
       position: "inside",
       fontSize: level === 1 ? 12 : 11,
@@ -420,7 +451,7 @@ const getExtendedPoint = (x0, y0, x1, y1, r = 30, labelText) => {
 };
 
 // 将树形数据转换为 Graph 数据格式
-const convertTreeToGraph = (treeData) => {
+const convertTreeToGraph = (treeData, isPrint = false) => {
   // 递归过滤不可见节点
   function filterVisible(node) {
     if (!node || node.visible === false) return null;
@@ -557,9 +588,10 @@ const convertTreeToGraph = (treeData) => {
       sectorStart: sectorStart,
       sectorEnd: sectorEnd,
       fixed: true, // 固定位置，保持径向布局
-      symbolSize: node.symbolSize || getSymbolSize(level),
+      symbolSize: node.symbolSize || getSymbolSize(isPrint, level),
       // symbol: "rect",
       label: getLabelStyle(
+        isPrint,
         node,
         level,
         currentAngle,
@@ -567,7 +599,7 @@ const convertTreeToGraph = (treeData) => {
         currentRadius,
         { x: x, y: y }
       ),
-      itemStyle: node.itemStyle || getItemStyle(level, node),
+      itemStyle: node.itemStyle || getItemStyle(isPrint, level, node),
       category: level, // 用于分类着色
     };
 
@@ -850,7 +882,32 @@ const initGraphChart = (myChart) => {
 
       // 清除任何待执行的隐藏操作
       clearTimeout(hideTimeout);
+      // 如果是同一个节点（包括从节点到标签的移动），不需要重新显示加号
+      if (lastHoverNodeIdx === currentNodeIdx) {
+        return;
+      }
 
+      // 更新最后hover的节点路径
+      lastHoverNodeIdx = currentNodeIdx;
+
+      showPlusButton(params.data);
+    }
+  });
+
+  myChart.on("mousemove", function (params) {
+    console.log("mousemove");
+
+    if (
+      params.componentType === "series" &&
+      params.dataType === "node" &&
+      params.data.level > 1
+    ) {
+      // console.log('鼠标进入了节点（或节点label）:', params.name);
+
+      const currentNodeIdx = params.data.idx;
+
+      // 清除任何待执行的隐藏操作
+      clearTimeout(hideTimeout);
       // 如果是同一个节点（包括从节点到标签的移动），不需要重新显示加号
       if (lastHoverNodeIdx === currentNodeIdx) {
         return;
@@ -1466,6 +1523,89 @@ const setupPlusButtonEvents = () => {
 // 用于管理隐藏延迟的变量
 let hideTimeout = null;
 let lastHoverNodeIdx = null; // 记录最后hover的节点路径
+
+// print echart
+let mypRrintChart = null;
+const initPrintEchart = () => {
+  const chartDom = document.getElementById("print-echart");
+  mypRrintChart = echarts.init(chartDom);
+  var option = {
+    series: [
+      {
+        type: "graph",
+        layout: "none", // 使用固定位置布局
+        // roam: true, // 允许缩放和拖动
+        roam: true,
+        zoom: 1.2, // 🌟 默认缩放比例（越小越缩）
+        center: [0, 0],
+        data: [],
+        links: [],
+        symbol: "circle",
+        symbolSize: 30, // 使用默认大小，节点自带的 symbolSize 会覆盖
+        label: {
+          show: true,
+          position: function (params) {
+            return params && params.data && params.data.level >= 5
+              ? "right"
+              : "inside";
+          },
+          fontSize: function (params) {
+            return params && params.data && params.data.level >= 5 ? 10 : 12;
+          },
+          // overflow: "truncate",
+          formatter: function (params) {
+            var name = params.name || "";
+            if (params && params.data && params.data.level >= 3) {
+              return name;
+            }
+            // 处理长文本换行
+            var spaceParts = name.split(" ");
+            var lines = [];
+            for (var i = 0; i < spaceParts.length; i++) {
+              var part = spaceParts[i];
+
+              lines.push(part);
+            }
+            return lines.join("\n");
+          },
+        },
+        lineStyle: {
+          color: "source", // 使用源节点颜色
+          curveness: 0,
+          width: 1,
+        },
+        animationDurationUpdate: 750,
+        animationEasingUpdate: "quinticInOut",
+      },
+    ],
+  };
+
+  mypRrintChart.setOption(option);
+};
+
+const downloadEchartBtnDisabled = ref(false);
+function exportChart() {
+  downloadEchartBtnDisabled.value = true;
+  const graphData = convertTreeToGraph(treeRoot, true);
+  mypRrintChart.setOption({
+    series: [{ data: graphData.nodes, links: graphData.links }],
+  });
+  setTimeout(() => {
+    const imgData = mypRrintChart.getDataURL({
+      type: "png",
+      pixelRatio: 2,
+      backgroundColor: "#fff",
+    });
+
+    const link = document.createElement("a");
+    link.download = "ZeroRepo_UI.png";
+    link.href = imgData;
+    link.click();
+    setTimeout(() => {
+      downloadEchartBtnDisabled.value = false;
+    }, 1000);
+  }, 1000);
+}
 </script>
 
 <style scoped lang="scss">
